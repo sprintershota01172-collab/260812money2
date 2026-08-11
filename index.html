@@ -1,0 +1,2363 @@
+<!DOCTYPE html>
+<html lang="ja" id="html-root">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MoneyVault</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
+    <style>
+        :root {
+            --theme-bg: #f5f5f7; 
+            --theme-text: #1d1d1f; 
+            --theme-card: rgba(255, 255, 255, 0.85);
+            --theme-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif;
+            --theme-size: 16px;
+        }
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        html { 
+            font-size: var(--theme-size); 
+            transition: font-size 0.3s ease;
+            overflow-x: hidden;
+        }
+        body { 
+            background-color: var(--theme-bg); 
+            color: var(--theme-text); 
+            font-family: var(--theme-font);
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        input, select, textarea { 
+            font-size: max(16px, 1rem) !important; 
+            color: var(--theme-text);
+            font-family: var(--theme-font);
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        body.modal-open { overflow: hidden; }
+        .hidden-view { display: none !important; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 4px; }
+        
+        /* 背景色（ライト／ダーク）の両方で美しく見える環境適応グラスカード */
+        .glass-card {
+            background-color: var(--theme-card);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border: 1px solid rgba(128, 128, 128, 0.22);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+        }
+        .glass-input {
+            background-color: rgba(128, 128, 128, 0.12);
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            color: var(--theme-text);
+        }
+        .glass-input:focus {
+            background-color: rgba(128, 128, 128, 0.18);
+            border-color: #0a84ff;
+            outline: none;
+        }
+        
+        .btn-inverse {
+            background-color: var(--theme-text);
+            color: var(--theme-bg);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+        }
+        .btn-inverse:active {
+            transform: scale(0.98);
+        }
+
+        .heat-1 { background-color: rgba(128, 128, 128, 0.08); }
+        .heat-2 { background-color: rgba(255, 59, 48, 0.35); color: white; }
+        .heat-3 { background-color: rgba(255, 59, 48, 0.7); color: white; }
+        .heat-4 { background-color: rgba(255, 59, 48, 1); color: white; }
+        .trip-day { border: 2px solid #0a84ff; box-shadow: inset 0 0 6px rgba(10,132,255,0.4); }
+        .calendar-day-cell:active { transform: scale(0.95); }
+        
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+    </style>
+</head>
+<body id="app-body" class="pb-28 antialiased transition-all duration-500 opacity-0">
+
+    <!-- ================= ヘッダー ================= -->
+    <header class="glass-card px-4 pt-[max(env(safe-area-inset-top),16px)] pb-3 sticky top-0 z-40 border-b border-gray-400/20">
+        <div class="flex justify-between items-center mb-3 relative">
+            <div class="flex space-x-1">
+                <button onclick="undo()" id="btn-undo" class="p-1.5 opacity-50 active:scale-90 transition-transform disabled:opacity-20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                </button>
+                <button onclick="redo()" id="btn-redo" class="p-1.5 opacity-50 active:scale-90 transition-transform disabled:opacity-20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"></path></svg>
+                </button>
+            </div>
+            <h1 class="text-lg font-black absolute left-1/2 transform -translate-x-1/2 tracking-tight">MoneyVault</h1>
+            <div class="w-8"></div>
+        </div>
+
+        <!-- 途切れない Apple 純正風 Segmented Control -->
+        <div id="header-tabs-container" class="flex w-full max-w-full box-border p-1 bg-gray-500/15 rounded-xl border border-gray-400/20 transition-all duration-300 overflow-hidden">
+            <button id="tab-family" onclick="switchTab('family')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg bg-[var(--theme-card)] shadow-sm text-sky-500 transition-all select-none truncate">家族</button>
+            <button id="tab-personal" onclick="switchTab('personal')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg opacity-60 transition-all select-none truncate">個人</button>
+            <button id="tab-tatekae" onclick="switchTab('tatekae')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg opacity-60 transition-all select-none truncate">立替</button>
+            <button id="tab-calc" onclick="switchTab('calc')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg opacity-60 transition-all select-none truncate">計算</button>
+        </div>
+    </header>
+
+    <!-- 左右の余白を十分に確保したコンテナ -->
+    <main class="p-4 max-w-md mx-auto">
+        <!-- ================= ホーム ================= -->
+        <div id="view-home" class="app-view space-y-3.5">
+            <div id="home-standard-sections" class="space-y-3.5">
+                
+                <!-- 残高カード（角丸と余白を完璧に最適化・はみ出しゼロ） -->
+                <section class="glass-card p-5 rounded-3xl relative overflow-hidden">
+                    <p class="text-xs font-bold opacity-70 mb-1 tracking-wider uppercase flex items-center">
+                        <span class="w-2 h-2 rounded-full bg-sky-500 mr-2"></span>今月の残額 (先月収入 - 今月支出)
+                    </p>
+                    <h2 id="display-balance" class="text-4xl font-black mb-4 tracking-tight tabular-nums">¥0</h2>
+                    
+                    <div class="flex justify-between border-t border-gray-400/20 pt-3.5">
+                        <div class="flex items-center">
+                            <div class="bg-emerald-500/15 p-2 rounded-xl mr-3 text-emerald-500">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M7 11l5-5m0 0l5 5m-5-5v12"></path></svg>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-bold opacity-60 uppercase tracking-wider">INCOME (先月)</p>
+                                <p id="display-income" class="text-base font-black text-emerald-500 tabular-nums">¥0</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="bg-rose-500/15 p-2 rounded-xl mr-3 text-rose-500">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 13l-5 5m0 0l5 5m-5-5v12"></path></svg>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-bold opacity-60 uppercase tracking-wider">EXPENSE (今月)</p>
+                                <p id="display-expense" class="text-base font-black text-rose-500 tabular-nums">¥0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3.5 glass-input p-3 rounded-2xl flex justify-between items-center">
+                        <div class="flex items-center opacity-80">
+                            <svg class="w-4 h-4 mr-2 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                            <span class="text-xs font-bold">今月カード引落見込み</span>
+                        </div>
+                        <span id="display-card-expense" class="text-sm font-black tabular-nums">¥0</span>
+                    </div>
+                </section>
+
+                <!-- 個人タブのみに表示する出張管理セクション -->
+                <section id="trip-dashboard-section" class="glass-card p-5 rounded-3xl relative overflow-hidden hidden border-l-4 border-sky-500">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-black opacity-90 flex items-center tracking-wide">
+                            <svg class="w-4 h-4 mr-1.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                            出張管理・収支
+                        </h3>
+                        <button onclick="openTripModal()" class="text-xs glass-input hover:bg-black/10 px-3.5 py-1.5 rounded-xl font-bold transition-all active:scale-95 text-sky-500">＋ 出張登録</button>
+                    </div>
+                    <div class="flex justify-between items-end">
+                        <div class="space-y-1">
+                            <p class="text-xs font-bold opacity-80">受取日当: <span id="trip-income" class="text-emerald-500 font-bold tabular-nums">¥0</span></p>
+                            <p class="text-xs font-bold opacity-80">出張経費: <span id="trip-expense" class="text-rose-500 font-bold tabular-nums">¥0</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] opacity-60 uppercase font-bold tracking-wider mb-0.5">実質損益</p>
+                            <p id="trip-net" class="text-2xl font-black text-sky-500 tabular-nums">¥0</p>
+                        </div>
+                    </div>
+                    
+                    <details class="mt-3.5 border-t border-gray-400/20 pt-2 text-xs">
+                        <summary class="font-bold opacity-70 cursor-pointer outline-none flex items-center p-1.5 hover:bg-black/5 rounded-lg transition-colors text-xs">
+                            <svg class="w-4 h-4 mr-1.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            期間ごとの出張履歴を見る
+                        </summary>
+                        <div id="trip-history-list" class="mt-2 max-h-48 overflow-y-auto pr-1"></div>
+                    </details>
+                </section>
+
+                <section class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-sm font-black opacity-90 mb-3 tracking-tight">今月の支出内訳</h3>
+                    <div class="relative h-32 w-full mb-3">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                    <div id="expense-list-details" class="space-y-1"></div>
+                </section>
+            </div>
+
+            <!-- 立替ダッシュボード -->
+            <div id="tatekae-dashboard-sections" class="space-y-3.5 hidden">
+                <section class="glass-card p-5 rounded-3xl">
+                    <p class="text-sm font-black opacity-90 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        メンバー別の相殺・精算状況
+                    </p>
+                    <div id="tatekae-balances-list" class="glass-input rounded-2xl p-3.5 divide-y divide-gray-400/20"></div>
+                    <button onclick="settleAll()" class="w-full mt-3.5 btn-inverse text-sm font-bold py-3.5 rounded-2xl active:scale-[0.98] transition-all">
+                        未精算をすべて「精算済」にする
+                    </button>
+                </section>
+            </div>
+
+            <!-- 森國計算ダッシュボード -->
+            <div id="calc-dashboard-sections" class="space-y-3.5 hidden">
+                <section class="glass-card p-5 rounded-3xl">
+                    <div class="flex items-center mb-3 border-b border-gray-400/20 pb-2.5">
+                        <span class="text-xl mr-2">🏠</span>
+                        <h2 class="text-base font-black opacity-90 tracking-tight">家計振込計算</h2>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div id="calc-result-container" class="hidden bg-emerald-500/10 rounded-2xl p-3.5 border border-emerald-500/20">
+                            <pre id="calc-out" class="whitespace-pre-wrap text-xs font-bold font-sans leading-relaxed"></pre>
+                            <button id="line-share-btn" class="mt-3 w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold rounded-xl py-3 flex justify-center items-center active:scale-[0.98] transition-all text-xs">
+                                LINEで結果を送付する
+                            </button>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold opacity-70 mb-1.5">今月のカード請求額</label>
+                            <input id="calc-amt" type="text" placeholder="金額または数式（例: 10000+25000）" class="w-full glass-input rounded-2xl p-3.5 outline-none transition-all text-base font-bold text-center min-w-0 tabular-nums">
+                        </div>
+                        
+                        <details class="glass-input rounded-2xl text-xs overflow-hidden">
+                            <summary class="font-bold opacity-80 cursor-pointer outline-none p-3 hover:bg-black/5 transition-colors text-xs">⚙️ 負担額の計算設定を変更</summary>
+                            <div class="p-3.5 border-t border-gray-400/20 space-y-2.5">
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div class="min-w-0"><label class="block text-[10px] font-bold opacity-70 mb-1">翔太 固定(¥)</label><input type="number" id="calc-fixed-shota" class="w-full glass-input rounded-lg p-1.5 text-right min-w-0 text-xs font-bold"></div>
+                                    <div class="min-w-0"><label class="block text-[10px] font-bold opacity-70 mb-1">しほ 固定(¥)</label><input type="number" id="calc-fixed-shiho" class="w-full glass-input rounded-lg p-1.5 text-right min-w-0 text-xs font-bold"></div>
+                                    <div class="min-w-0"><label class="block text-[10px] font-bold opacity-70 mb-1">食費(¥)</label><input type="number" id="calc-food" class="w-full glass-input rounded-lg p-1.5 text-right min-w-0 text-xs font-bold"></div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-gray-400/10">
+                                    <div class="flex items-center justify-between min-w-0"><span class="text-[10px] font-bold opacity-70 shrink-0 mr-1">翔太 変動</span><div class="flex items-center"><input type="number" id="calc-ratio-shota" class="w-12 glass-input rounded-lg p-1 text-right text-xs font-bold min-w-0"><span class="text-[10px] ml-1">%</span></div></div>
+                                    <div class="flex items-center justify-between min-w-0"><span class="text-[10px] font-bold opacity-70 shrink-0 mr-1">しほ 変動</span><div class="flex items-center"><input type="number" id="calc-ratio-shiho" class="w-12 glass-input rounded-lg p-1 text-right text-xs font-bold min-w-0"><span class="text-[10px] ml-1">%</span></div></div>
+                                </div>
+                            </div>
+                        </details>
+
+                        <button onclick="runFamilyCalc()" class="w-full btn-inverse font-bold rounded-2xl p-3.5 active:scale-[0.98] transition-all text-sm">
+                            負担額を計算する
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- ================= 予算画面 ================= -->
+        <div id="view-budget" class="app-view hidden-view space-y-3.5">
+            <div class="flex justify-between items-center px-1">
+                <button onclick="changeBudgetMonth(-1)" class="p-2 opacity-60 hover:opacity-100 font-bold text-lg">◀</button>
+                <h2 id="budget-month-title" class="text-base font-black opacity-90 tracking-tight">予算計画</h2>
+                <button onclick="changeBudgetMonth(1)" class="p-2 opacity-60 hover:opacity-100 font-bold text-lg">▶</button>
+            </div>
+            
+            <div id="tatekae-budget-msg" class="hidden text-center opacity-50 py-10 glass-card rounded-3xl font-bold text-sm"></div>
+            
+            <div id="budget-content" class="space-y-3">
+                <div class="glass-card p-5 rounded-3xl relative">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-black text-sm opacity-90 text-left">総予算・支出状況</span>
+                        <button onclick="toggleBudgetEdit()" id="btn-budget-edit" class="text-xs glass-input px-3.5 py-1.5 rounded-lg font-bold transition-all z-10">編集</button>
+                    </div>
+                    <div class="flex justify-end mb-1">
+                        <div class="text-right">
+                            <span id="budget-total-text" class="text-sm font-black opacity-80 block tabular-nums">¥0 / ¥0</span>
+                            <span id="budget-estimate-text" class="text-[10px] font-bold opacity-50 block mt-0.5 tabular-nums">予想計: ¥0</span>
+                        </div>
+                    </div>
+                    <div class="w-full glass-input rounded-full h-2.5 relative overflow-hidden mt-2">
+                        <div id="budget-total-est-bar" class="absolute top-0 left-0 bg-amber-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        <div id="budget-total-bar" class="absolute top-0 left-0 bg-sky-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="budget-warning-text" class="text-xs font-bold mt-2 text-right hidden"></div>
+                    <button onclick="shareBudgetLINE()" id="btn-budget-share" class="mt-4 w-full bg-[#06C755] text-white font-bold rounded-xl p-3 flex justify-center items-center active:scale-[0.98] transition-all text-xs">
+                        予算状況をLINE共有
+                    </button>
+                </div>
+                <div id="budget-category-list" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- ================= 推移（トレンド）画面 ================= -->
+        <div id="view-trend" class="app-view hidden-view space-y-3.5">
+            <h2 class="text-base font-black opacity-90 tracking-tight px-1">先月収入 － 当月支出の収支推移</h2>
+            
+            <!-- はみ出し対策を徹底したトレンドカード -->
+            <div class="glass-card p-5 rounded-3xl">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-xs font-bold opacity-70">直近6ヶ月の収支比較</h3>
+                </div>
+                <div class="relative h-60 w-full px-1">
+                    <canvas id="trendChart"></canvas>
+                </div>
+                <p class="text-[11px] opacity-70 text-center mt-3 font-bold leading-relaxed">
+                    ※各月は「前月の確定収入」と「当月の確定支出」を比較した実質収支を表示しています。
+                </p>
+            </div>
+        </div>
+
+        <!-- ================= カレンダー画面 ================= -->
+        <div id="view-calendar" class="app-view hidden-view space-y-2.5 -mt-1">
+            <div class="flex justify-between items-center px-1">
+                <button onclick="changeMonth(-1)" class="p-2 opacity-60 hover:opacity-100 font-bold text-lg">◀</button>
+                <h2 id="calendar-month" class="text-base font-black opacity-90 tracking-tight"></h2>
+                <button onclick="changeMonth(1)" class="p-2 opacity-60 hover:opacity-100 font-bold text-lg">▶</button>
+            </div>
+            <div class="glass-card p-4 rounded-3xl">
+                <div class="grid grid-cols-7 gap-1 text-center text-xs opacity-60 mb-2 font-black uppercase tracking-wider">
+                    <div class="text-rose-500">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="text-sky-500">土</div>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1.5 text-center"></div>
+                <div class="mt-3 flex justify-between items-center text-[11px] opacity-60 border-t border-gray-400/20 pt-2 font-bold">
+                    <div class="flex space-x-1.5 items-center">
+                        <span>少</span>
+                        <span class="w-3 h-3 rounded bg-gray-400/20"></span>
+                        <span class="w-3 h-3 rounded bg-rose-500/40"></span>
+                        <span class="w-3 h-3 rounded bg-rose-500/70"></span>
+                        <span class="w-3 h-3 rounded bg-rose-600"></span>
+                        <span>多</span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="w-3 h-3 rounded border border-sky-400 bg-transparent"></span>
+                        <span>出張日</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 当日明細カード -->
+            <div id="calendar-day-detail-card" class="glass-card p-4 rounded-3xl transition-all duration-300">
+                <h4 id="calendar-day-detail-title" class="text-xs font-bold opacity-70 mb-2.5 tracking-wider uppercase">選択した日の明細</h4>
+                <div id="calendar-day-detail-list" class="space-y-2 max-h-44 overflow-y-auto pr-1"></div>
+            </div>
+        </div>
+
+        <!-- ================= 履歴画面 ================= -->
+        <div id="view-history" class="app-view hidden-view space-y-3">
+            <div class="flex justify-between items-center mb-0.5 px-1">
+                <h2 class="text-base font-black opacity-90 tracking-tight">入出金履歴</h2>
+            </div>
+            <div id="history-list" class="flex flex-col space-y-2.5 pb-24 pr-1"></div>
+        </div>
+
+        <!-- ================= 設定画面 ================= -->
+        <div id="view-settings" class="app-view hidden-view space-y-3">
+            <h2 class="text-base font-black opacity-90 tracking-tight px-1">設定・カスタマイズ</h2>
+            
+            <div id="settings-content" class="space-y-3 pb-24 pr-1">
+                
+                <div class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-xs font-black opacity-90 mb-3">🔤 フォント・文字サイズ設定</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex flex-col min-w-0">
+                            <label class="text-[11px] font-bold opacity-70 mb-1">フォント</label>
+                            <select id="theme-font-family" onchange="updateTheme()" class="w-full glass-input rounded-xl p-2.5 text-xs outline-none min-w-0 font-bold">
+                                <option value="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif">Apple標準 (Sans)</option>
+                                <option value="'Meiryo UI', Meiryo, sans-serif">Meiryo UI (メイリオ)</option>
+                                <option value="ui-serif, Georgia, serif">明朝 (Serif)</option>
+                                <option value="'Rounded Mplus 1c', 'Hiragino Maru Gothic ProN', sans-serif">丸ゴシック</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <label class="text-[11px] font-bold opacity-70 mb-1">文字サイズ</label>
+                            <select id="theme-text-size" onchange="updateTheme()" class="w-full glass-input rounded-xl p-2.5 text-xs outline-none min-w-0 font-bold">
+                                <option value="14px">小さめ</option>
+                                <option value="16px">標準</option>
+                                <option value="18px">大きめ</option>
+                                <option value="20px">特大</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-xs font-black opacity-90 mb-3">🎨 アプリテーマ設定</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex flex-col min-w-0">
+                            <label class="text-[11px] font-bold opacity-70 mb-1">背景色</label>
+                            <input type="color" id="theme-bg-color" onchange="updateTheme()" class="w-full h-10 rounded-xl border-0 p-0 cursor-pointer overflow-hidden bg-transparent">
+                        </div>
+                        <div class="flex flex-col min-w-0">
+                            <label class="text-[11px] font-bold opacity-70 mb-1">文字色</label>
+                            <input type="color" id="theme-text-color" onchange="updateTheme()" class="w-full h-10 rounded-xl border-0 p-0 cursor-pointer overflow-hidden bg-transparent">
+                        </div>
+                    </div>
+                    <button onclick="resetTheme()" class="mt-3 w-full glass-input text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">デフォルトに戻す</button>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl flex flex-col space-y-2">
+                    <h3 class="text-xs font-black opacity-90">💾 データバックアップ・復元</h3>
+                    <p class="text-xs opacity-60">機種変更時などに、すべてのデータを引き継げます。</p>
+                    <div class="flex space-x-2.5 mt-1">
+                        <button onclick="exportBackup()" class="flex-1 glass-input px-3 py-3 rounded-xl text-xs font-bold transition-all active:scale-95">バックアップ保存</button>
+                        
+                        <label class="flex-1 btn-inverse px-3 py-3 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center cursor-pointer relative overflow-hidden m-0">
+                            データを復元
+                            <input type="file" id="import-file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".json,application/json" onchange="importBackup(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xs font-black opacity-90">エクスポート</h3>
+                        <p class="text-xs opacity-60 mt-0.5">履歴のCSVダウンロード</p>
+                    </div>
+                    <button onclick="exportCSV()" class="glass-input px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95">CSV出力</button>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-xs font-black opacity-90 mb-3">立替メンバー管理</h3>
+                    <div id="member-edit-list" class="flex flex-wrap gap-1.5 mb-2.5"></div>
+                    <div class="grid grid-cols-[1fr_auto] gap-2 border-t border-gray-400/20 pt-2.5">
+                        <input type="text" id="new-member-name" placeholder="名前" class="w-full glass-input rounded-xl p-2.5 outline-none text-xs min-w-0">
+                        <button onclick="addTatekaeMember()" class="btn-inverse px-4 rounded-xl font-bold text-xs active:scale-95">追加</button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-xs font-black opacity-90 mb-3">決済方法</h3>
+                    <div id="payment-edit-list" class="flex flex-wrap gap-1.5 mb-2.5"></div>
+                    <div class="grid grid-cols-[1fr_auto] gap-2 border-t border-gray-400/20 pt-2.5">
+                        <input type="text" id="new-payment-name" placeholder="例: PayPay" class="w-full glass-input rounded-xl p-2.5 outline-none text-xs min-w-0">
+                        <button onclick="addPaymentMethod()" class="btn-inverse px-4 rounded-xl font-bold text-xs active:scale-95">追加</button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-5 rounded-3xl">
+                    <h3 class="text-xs font-black opacity-90 mb-3">カテゴリー編集</h3>
+                    <div id="category-edit-list" class="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto pr-1"></div>
+                    <div class="grid grid-cols-[auto_auto_1fr_auto] gap-2 border-t border-gray-400/20 pt-2.5 items-center">
+                        <input type="color" id="new-cat-color" value="#3B82F6" class="w-9 h-9 rounded-xl border-0 p-0 cursor-pointer bg-transparent shrink-0">
+                        <input type="text" id="new-cat-icon" placeholder="絵文字" class="w-14 glass-input rounded-xl p-2 outline-none text-center text-xs shrink-0 min-w-0">
+                        <input type="text" id="new-cat-name" placeholder="名称" class="w-full glass-input rounded-xl p-2.5 outline-none text-xs min-w-0">
+                        <button onclick="addCategory()" class="btn-inverse px-4 py-2.5 rounded-xl font-bold text-xs shrink-0 active:scale-95">追加</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tatekae-settings-msg" class="hidden text-center opacity-60 py-8 glass-card rounded-3xl font-bold text-sm"></div>
+        </div>
+    </main>
+
+    <!-- ================= どの口座に記録しますか？モーダル（大型＆スマート上部配置） ================= -->
+    <div id="mode-select-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] hidden flex flex-col items-center justify-start pt-[max(env(safe-area-inset-top),28px)] px-4 transition-opacity" onclick="closeModal('mode-select-modal')">
+        <div class="glass-card rounded-3xl p-6 w-full max-w-md mx-auto transform shadow-2xl relative" onclick="event.stopPropagation()">
+            <div class="text-center mb-5">
+                <span class="inline-block px-3 py-1 bg-sky-500/10 text-sky-500 rounded-full text-[10px] font-black mb-1.5 tracking-wider uppercase">RECORD ACCOUNT</span>
+                <h3 class="text-lg font-black tracking-tight">どの口座に記録しますか？</h3>
+            </div>
+            <div class="grid grid-cols-1 gap-3">
+                <button onclick="selectModeAndOpenModal('family')" class="w-full glass-input hover:bg-sky-500/10 font-black rounded-2xl p-4 transition-all flex items-center justify-between shadow-sm active:scale-[0.98] pointer-events-auto group">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-3xl pointer-events-none group-hover:scale-110 transition-transform">👨‍👩‍👧</span>
+                        <div class="text-left pointer-events-none">
+                            <p class="text-base font-black">家族口座</p>
+                            <p class="text-xs opacity-60 font-bold">家族全体の共有生活費・光熱費など</p>
+                        </div>
+                    </div>
+                    <span class="text-sky-500 font-extrabold text-sm opacity-0 group-hover:opacity-100 transition-opacity">選択 →</span>
+                </button>
+                <button onclick="selectModeAndOpenModal('personal')" class="w-full glass-input hover:bg-sky-500/10 font-black rounded-2xl p-4 transition-all flex items-center justify-between shadow-sm active:scale-[0.98] pointer-events-auto group">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-3xl pointer-events-none group-hover:scale-110 transition-transform">👤</span>
+                        <div class="text-left pointer-events-none">
+                            <p class="text-base font-black">個人口座</p>
+                            <p class="text-xs opacity-60 font-bold">個人のお小遣い・自分自由費・出張</p>
+                        </div>
+                    </div>
+                    <span class="text-sky-500 font-extrabold text-sm opacity-0 group-hover:opacity-100 transition-opacity">選択 →</span>
+                </button>
+                <button onclick="selectModeAndOpenModal('tatekae')" class="w-full glass-input hover:bg-sky-500/10 font-black rounded-2xl p-4 transition-all flex items-center justify-between shadow-sm active:scale-[0.98] pointer-events-auto group">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-3xl pointer-events-none group-hover:scale-110 transition-transform">🤝</span>
+                        <div class="text-left pointer-events-none">
+                            <p class="text-base font-black">立替管理</p>
+                            <p class="text-xs opacity-60 font-bold">パートナーとの貸し借り・割り勘管理</p>
+                        </div>
+                    </div>
+                    <span class="text-sky-500 font-extrabold text-sm opacity-0 group-hover:opacity-100 transition-opacity">選択 →</span>
+                </button>
+            </div>
+            <button onclick="closeModal('mode-select-modal')" class="mt-5 w-full text-xs font-bold opacity-60 hover:opacity-100 p-3 rounded-2xl hover:bg-black/5 transition-all pointer-events-auto">キャンセルして戻る</button>
+        </div>
+    </div>
+
+    <!-- ================= 収支入力モーダル ================= -->
+    <div id="input-modal" class="fixed inset-0 z-[70] hidden flex-col transition-opacity bg-[var(--theme-bg)] overflow-y-auto">
+        <div class="w-full max-w-md mx-auto p-4 flex flex-col min-h-screen pb-24">
+            <div class="flex justify-between items-center mb-4 sticky top-0 bg-[var(--theme-bg)] z-10 py-3 border-b border-gray-400/20">
+                <h3 id="modal-title" class="text-lg font-black opacity-90 tracking-tight">入出金の記録</h3>
+                <button onclick="closeModal('input-modal')" class="opacity-50 hover:opacity-100 p-2 bg-gray-400/10 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form id="transaction-form" onsubmit="saveTransaction(event)" class="space-y-4 flex-1">
+                <input type="hidden" id="edit-id" value="">
+                
+                <div class="mb-1">
+                    <input type="file" id="ocr-file-input" accept="image/*" capture="environment" class="hidden" onchange="processOCR(event)">
+                    <button type="button" id="ocr-btn" onclick="document.getElementById('ocr-file-input').click()" class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black rounded-2xl py-3.5 flex justify-center items-center active:scale-95 transition-transform text-sm tracking-wider shadow-md">
+                        <span class="mr-1.5 text-base">📷</span> レシート撮影で金額自動入力
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 border-t border-gray-400/20 pt-3">
+                    <div id="status-type-container" class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1.5">データ性質</label>
+                        <div class="flex glass-input p-0.5 rounded-xl w-full">
+                            <label class="flex-1 text-center cursor-pointer min-w-0">
+                                <input type="radio" name="nature" value="actual" checked class="sr-only peer">
+                                <span class="block py-2 text-xs font-bold opacity-60 rounded-lg peer-checked:bg-[var(--theme-text)] peer-checked:text-[var(--theme-bg)] peer-checked:opacity-100 transition-all truncate">実績</span>
+                            </label>
+                            <label class="flex-1 text-center cursor-pointer min-w-0">
+                                <input type="radio" name="nature" value="estimate" class="sr-only peer">
+                                <span class="block py-2 text-xs font-bold opacity-60 rounded-lg peer-checked:bg-[var(--theme-text)] peer-checked:text-[var(--theme-bg)] peer-checked:opacity-100 transition-all truncate">予定</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="type-container" class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1.5">種類</label>
+                        <div class="flex space-x-5 items-center h-full pb-1 pl-1">
+                            <label class="flex items-center text-sm font-black cursor-pointer"><input type="radio" name="type" value="expense" checked class="w-4 h-4 text-sky-500"><span class="ml-2 opacity-90">支出</span></label>
+                            <label class="flex items-center text-sm font-black cursor-pointer"><input type="radio" name="type" value="income" class="w-4 h-4 text-sky-500"><span class="ml-2 opacity-90">収入</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tatekae-fields" class="hidden bg-black/5 p-3.5 rounded-2xl border border-gray-400/20 mb-2 space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="min-w-0">
+                            <label class="block text-xs font-bold opacity-70 mb-1">支払人(立替元)</label>
+                            <select id="tatekae-payer" class="w-full glass-input rounded-xl p-2.5 text-sm outline-none min-w-0 font-bold"></select>
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-xs font-bold opacity-70 mb-1">負担人(請求先)</label>
+                            <select id="tatekae-burden" class="w-full glass-input rounded-xl p-2.5 text-sm outline-none min-w-0 font-bold"></select>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex space-x-6 pl-1 mt-1">
+                            <label class="flex items-center text-xs font-bold opacity-90"><input type="radio" name="tatekae-status" value="unsettled" checked class="w-4 h-4"><span class="ml-2">未精算</span></label>
+                            <label class="flex items-center text-xs font-bold opacity-50"><input type="radio" name="tatekae-status" value="settled" class="w-4 h-4"><span class="ml-2">精算済</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 border-t border-gray-400/20 pt-3">
+                    <div class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1">カテゴリー</label>
+                        <select id="category" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold"></select>
+                    </div>
+                    <div id="payment-method-container" class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1">決済方法</label>
+                        <select id="payment-method" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold"></select>
+                    </div>
+                </div>
+                
+                <div id="point-budget-option-container" class="hidden bg-sky-500/10 p-3.5 rounded-2xl border border-sky-500/20 mt-3">
+                    <label class="block text-[11px] font-black text-sky-600 mb-2.5 tracking-wide">💡 ポイント利用時の予算設定</label>
+                    <div class="flex space-x-5 pl-1">
+                        <label class="flex items-center text-xs font-bold cursor-pointer">
+                            <input type="radio" name="point-budget" value="deduct" checked class="w-4 h-4 text-sky-500">
+                            <span class="ml-2 opacity-90">予算からマイナスする</span>
+                        </label>
+                        <label class="flex items-center text-xs font-bold cursor-pointer">
+                            <input type="radio" name="point-budget" value="exclude" class="w-4 h-4 text-sky-500">
+                            <span class="ml-2 opacity-90">予算に含めない</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 border-t border-gray-400/20 pt-3">
+                    <div class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1">日付</label>
+                        <input type="date" id="date" required class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold">
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-xs font-bold opacity-70 mb-1">金額 (¥)</label>
+                        <input type="number" id="amount" required placeholder="0" class="w-full glass-input rounded-xl p-3 outline-none text-lg font-black text-right min-w-0 tabular-nums">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold opacity-70 mb-1">メモ</label>
+                    <input type="text" id="memo" list="memo-suggestions" placeholder="品名やイベントなど" autocomplete="on" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold">
+                    <datalist id="memo-suggestions"></datalist>
+                </div>
+                <button type="submit" id="submit-btn" class="w-full btn-inverse font-black rounded-2xl py-4 mt-5 shadow-lg active:scale-[0.98] transition-all text-base">保存する</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= 出張登録モーダル ================= -->
+    <div id="trip-modal" class="fixed inset-0 z-[70] hidden flex-col transition-opacity bg-[var(--theme-bg)] overflow-y-auto">
+        <div class="w-full max-w-md mx-auto p-4 flex flex-col min-h-screen pb-24">
+            <div class="flex justify-between items-center mb-4 sticky top-0 bg-[var(--theme-bg)] z-10 py-3 border-b border-gray-400/20">
+                <h3 class="text-lg font-black opacity-90 tracking-tight">出張の登録</h3>
+                <button onclick="closeModal('trip-modal')" class="opacity-50 hover:opacity-100 p-2 bg-gray-400/10 rounded-full">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form id="trip-form" onsubmit="saveTrip(event)" class="space-y-4 flex-1">
+                <div class="bg-black/5 p-4 rounded-3xl border border-gray-400/20">
+                    <p class="text-xs font-black opacity-80 tracking-wider uppercase mb-2">出張手当単価</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="min-w-0">
+                            <label class="block text-[11px] opacity-70 font-bold mb-1">日当 (1日あたり)</label>
+                            <input type="number" id="trip-daily-rate" value="1800" onchange="updateTripSettings(); calculateTripPreview()" class="w-full glass-input rounded-xl p-2.5 text-sm outline-none min-w-0 text-right font-black tabular-nums">
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-[11px] opacity-70 font-bold mb-1">宿泊費 (1泊あたり)</label>
+                            <input type="number" id="trip-nightly-rate" value="2000" onchange="updateTripSettings(); calculateTripPreview()" class="w-full glass-input rounded-xl p-2.5 text-sm outline-none min-w-0 text-right font-black tabular-nums">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 border-t border-gray-400/20 pt-3">
+                    <div class="min-w-0">
+                        <label class="block text-[11px] font-bold opacity-70 mb-1">開始日</label>
+                        <input type="date" id="trip-start" required onchange="calculateTripPreview()" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold">
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-[11px] font-bold opacity-70 mb-1">終了日</label>
+                        <input type="date" id="trip-end" required onchange="calculateTripPreview()" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold">
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center p-4 glass-input rounded-2xl">
+                    <div>
+                        <p class="text-[11px] font-bold opacity-60 uppercase tracking-wider">算出結果</p>
+                        <p class="font-extrabold text-sm mt-0.5"><span id="trip-days-calc">0</span>日 / <span id="trip-nights-calc">0</span>泊</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[11px] font-bold opacity-60 uppercase tracking-wider">支給予定合計</p>
+                        <p id="trip-allowance-calc" class="text-3xl font-black opacity-90 mt-0.5 text-sky-500 tabular-nums">¥0</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-[11px] font-bold opacity-70 mb-1">目的</label>
+                    <input type="text" id="trip-memo" placeholder="例: 東京出張" class="w-full glass-input rounded-xl p-3 outline-none text-sm min-w-0 font-bold">
+                </div>
+                <button type="submit" class="w-full btn-inverse font-black rounded-2xl py-4 mt-5 shadow-lg active:scale-95 transition-all text-base">インカム計上</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= iPhone 17 ホームインジケーター配慮のボトムナビゲーション ================= -->
+    <nav class="glass-card border-t border-gray-400/20 fixed bottom-0 w-full px-2 pt-2 pb-[max(env(safe-area-inset-bottom),14px)] flex justify-between items-center z-30 shadow-2xl">
+        <button onclick="switchView('home')" id="nav-home" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">ホーム</span>
+        </button>
+        <button onclick="switchView('history')" id="nav-history" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">履歴</span>
+        </button>
+        <button onclick="switchView('trend')" id="nav-trend" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">推移</span>
+        </button>
+        
+        <div class="flex-1 flex justify-center relative -mt-7">
+            <button onclick="document.getElementById('mode-select-modal').classList.remove('hidden')" class="w-16 h-16 btn-inverse rounded-full flex items-center justify-center shadow-xl active:scale-90 hover:scale-105 transition-all border-[3.5px] border-[var(--theme-bg)] z-50">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8" d="M12 4v16m8-8H4"></path></svg>
+            </button>
+        </div>
+        
+        <button onclick="switchView('budget')" id="nav-budget" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">予算</span>
+        </button>
+        <button onclick="switchView('calendar')" id="nav-calendar" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">カレンダ</span>
+        </button>
+        <button onclick="switchView('settings')" id="nav-settings" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+            <span class="text-xs font-black tracking-tight mt-1">設定</span>
+        </button>
+    </nav>
+
+    <script>
+        const STORAGE_KEY = 'MoneyVaultData_v1'; 
+
+        let currentMode = 'family';
+        let currentView = 'home';
+        let chartInstance = null;
+        let trendChartInstance = null; 
+        let isBudgetEditing = false;
+        
+        let currentCalYear = new Date().getFullYear();
+        let currentCalMonth = new Date().getMonth();
+        let currentBudgetYear = new Date().getFullYear();
+        let currentBudgetMonth = new Date().getMonth();
+        let selectedCalendarDateStr = null;
+
+        let historyStack = [];
+        let historyIndex = -1;
+
+        let paymentMethods = []; 
+        let tatekaeMembers = ['夫（森國）', '妻'];
+        let tripSettings = { daily: 1800, nightly: 2000 };
+        let themeSettings = { bg: '#f5f5f7', text: '#1d1d1f', font: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif', size: '16px' };
+        let calcSettings = { fixedShota: 61000, fixedShiho: 41000, food: 14000, ratioShota: 50, ratioShiho: 50 };
+        let subscriptions = []; 
+
+        let categories = [
+            { name: '家賃・光熱・食費', color: '#EF4444', icon: '🏠' },
+            { name: '日用品費', color: '#F59E0B', icon: '🧻' },
+            { name: 'ガソリン・車維持', color: '#3B82F6', icon: '🚗' },
+            { name: '交通費', color: '#6366F1', icon: '🚃' },
+            { name: '通信・サブスク', color: '#EC4899', icon: '📱' },
+            { name: '家族自由費', color: '#10B981', icon: '👨‍👩‍👧' },
+            { name: '自分自由費', color: '#14B8A6', icon: '👤' },
+            { name: 'クレカ年会費積立', color: '#F59E0B', icon: '💳' },
+            { name: '貯蓄・投資・特別積立', color: '#8B5CF6', icon: '💰' },
+            { name: '出張での食費', color: '#F59E0B', icon: '🍱' },
+            { name: '出張日当', color: '#10B981', icon: '💼' }, 
+            { name: 'その他', color: '#9CA3AF', icon: '📝' },
+            { name: '家計精算', color: '#10B981', icon: '💸' }
+        ];
+
+        let appData = { 
+            family: { budgets: {}, transactions: [], trips: [] },
+            personal: { budgets: {}, transactions: [], trips: [] },
+            tatekae: { budgets: {}, transactions: [], trips: [] },
+            calc: { budgets: {}, transactions: [], trips: [] }
+        };
+
+        const initDummyData = () => {
+            appData.family.transactions = [];
+            appData.personal.transactions = [];
+            appData.tatekae.transactions = [];
+        };
+
+        function loadFromLocalStorage() {
+            const savedData = localStorage.getItem(STORAGE_KEY);
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    appData = parsed.appData || appData;
+                    ['family','personal','tatekae','calc'].forEach(m => {
+                        if(!appData[m]) appData[m] = { budgets: {}, transactions: [], trips: [] };
+                    });
+                    subscriptions = parsed.subscriptions || [];
+                    categories = parsed.categories || categories;
+                    paymentMethods = parsed.paymentMethods || []; 
+                    tatekaeMembers = parsed.tatekaeMembers || tatekaeMembers;
+                    tripSettings = parsed.tripSettings || tripSettings;
+                    themeSettings = parsed.themeSettings || themeSettings; 
+                    calcSettings = parsed.calcSettings || calcSettings;
+                } catch (e) {
+                    initDummyData();
+                }
+            } else {
+                initDummyData();
+            }
+        }
+
+        window.onload = () => {
+            loadFromLocalStorage();
+            applyTheme(); 
+            loadCalcSettingsUI(); 
+            document.getElementById('date').valueAsDate = new Date();
+            initSelectMenus();
+            setupTypeToggleListener();
+            processAutoSubscriptions();
+            saveState(); 
+            updateCategorySelect();
+            
+            if (Object.keys(appData.personal.budgets || {}).length === 0) {
+                appData.personal.budgets = {
+                    '家賃・光熱・食費': 75000,
+                    '日用品費': 5000,
+                    'ガソリン・車維持': 13000,
+                    '交通費': 3000,
+                    '通信・サブスク': 15584,
+                    '家族自由費': 15000,
+                    '自分自由費': 28416,
+                    'クレカ年会費積立': 3000,
+                    '貯蓄・投資・特別積立': 105000
+                };
+            }
+            checkWeeklyNotify();
+            
+            updateAllData();
+            
+            setTimeout(() => {
+                document.getElementById('app-body').classList.remove('opacity-0');
+                document.getElementById('app-body').classList.add('opacity-100');
+            }, 50);
+        };
+
+        function applyTheme() {
+            document.documentElement.style.setProperty('--theme-bg', themeSettings.bg || '#f5f5f7');
+            document.documentElement.style.setProperty('--theme-text', themeSettings.text || '#1d1d1f');
+            document.documentElement.style.setProperty('--theme-font', themeSettings.font || "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif");
+            document.documentElement.style.setProperty('--theme-size', themeSettings.size || '16px');
+            
+            document.getElementById('theme-bg-color').value = themeSettings.bg || '#f5f5f7';
+            document.getElementById('theme-text-color').value = themeSettings.text || '#1d1d1f';
+            document.getElementById('theme-font-family').value = themeSettings.font || "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif";
+            document.getElementById('theme-text-size').value = themeSettings.size || '16px';
+            
+            Chart.defaults.color = themeSettings.text;
+            Chart.defaults.font.family = themeSettings.font;
+
+            const hex = (themeSettings.bg || '#f5f5f7').replace('#', '');
+            if(hex.length === 6) {
+                const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                document.documentElement.style.setProperty('--theme-card', brightness > 128 ? 'rgba(255, 255, 255, 0.88)' : 'rgba(30, 41, 59, 0.85)');
+            }
+        }
+
+        function updateTheme() {
+            themeSettings.bg = document.getElementById('theme-bg-color').value;
+            themeSettings.text = document.getElementById('theme-text-color').value;
+            themeSettings.font = document.getElementById('theme-font-family').value;
+            themeSettings.size = document.getElementById('theme-text-size').value;
+            applyTheme();
+            saveState();
+            if (chartInstance) chartInstance.update();
+            if (trendChartInstance) trendChartInstance.update();
+        }
+
+        function resetTheme() {
+            themeSettings = { bg: '#f5f5f7', text: '#1d1d1f', font: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", size: '16px' };
+            applyTheme();
+            saveState();
+            if (chartInstance) chartInstance.update();
+            if (trendChartInstance) trendChartInstance.update();
+        }
+
+        function selectModeAndOpenModal(mode) {
+            switchTab(mode);
+            closeModal('mode-select-modal');
+            openModal();
+        }
+
+        function initSelectMenus() {
+            const methodSelect = document.getElementById('payment-method');
+            if (paymentMethods.length === 0) {
+                methodSelect.innerHTML = `<option value="">未設定（設定から追加）</option>`;
+                methodSelect.disabled = true;
+            } else {
+                methodSelect.innerHTML = paymentMethods.map(p => `<option value="${p}">${p}</option>`).join('');
+                methodSelect.disabled = false;
+            }
+            
+            const payerHtml = tatekaeMembers.map(m => `<option value="${m}">${m}</option>`).join('');
+            document.getElementById('tatekae-payer').innerHTML = payerHtml;
+            document.getElementById('tatekae-burden').innerHTML = `<option value="split">割勘（全員）</option>` + payerHtml;
+        }
+
+        function setupTypeToggleListener() {
+            const radios = document.querySelectorAll('input[name="type"]');
+            radios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const container = document.getElementById('payment-method-container');
+                    const pointContainer = document.getElementById('point-budget-option-container');
+                    if (e.target.value === 'expense') {
+                        container.style.display = 'block';
+                        if (document.getElementById('payment-method').value.includes('ポイント')) {
+                            pointContainer.classList.remove('hidden');
+                        }
+                    } else {
+                        container.style.display = 'none';
+                        pointContainer.classList.add('hidden');
+                    }
+                });
+            });
+
+            document.getElementById('payment-method').addEventListener('change', (e) => {
+                const pointContainer = document.getElementById('point-budget-option-container');
+                if (e.target.value.includes('ポイント')) {
+                    pointContainer.classList.remove('hidden');
+                } else {
+                    pointContainer.classList.add('hidden');
+                }
+            });
+        }
+
+        function saveState() {
+            historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(JSON.parse(JSON.stringify({ appData, categories, subscriptions, paymentMethods, tatekaeMembers, tripSettings, themeSettings, calcSettings })));
+            historyIndex++;
+            updateUndoRedoUI();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ appData, categories, subscriptions, paymentMethods, tatekaeMembers, tripSettings, themeSettings, calcSettings }));
+        }
+
+        function undo() { if (historyIndex > 0) { historyIndex--; restoreState(historyStack[historyIndex]); } }
+        function redo() { if (historyIndex < historyStack.length - 1) { historyIndex++; restoreState(historyStack[historyIndex]); } }
+
+        function restoreState(state) {
+            appData = JSON.parse(JSON.stringify(state.appData));
+            categories = JSON.parse(JSON.stringify(state.categories));
+            subscriptions = JSON.parse(JSON.stringify(state.subscriptions));
+            paymentMethods = state.paymentMethods ? JSON.parse(JSON.stringify(state.paymentMethods)) : paymentMethods;
+            tatekaeMembers = state.tatekaeMembers ? JSON.parse(JSON.stringify(state.tatekaeMembers)) : tatekaeMembers;
+            tripSettings = state.tripSettings ? JSON.parse(JSON.stringify(state.tripSettings)) : tripSettings;
+            themeSettings = state.themeSettings ? JSON.parse(JSON.stringify(state.themeSettings)) : themeSettings;
+            calcSettings = state.calcSettings ? JSON.parse(JSON.stringify(state.calcSettings)) : calcSettings;
+            
+            applyTheme();
+            loadCalcSettingsUI();
+            updateUndoRedoUI();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ appData, categories, subscriptions, paymentMethods, tatekaeMembers, tripSettings, themeSettings, calcSettings }));
+            initSelectMenus();
+            updateAllData();
+            if(currentView === 'budget') renderBudget();
+            if(currentView === 'trend') renderTrend();
+            if(currentView === 'settings') renderSettings();
+        }
+
+        function updateUndoRedoUI() {
+            document.getElementById('btn-undo').disabled = historyIndex <= 0;
+            document.getElementById('btn-redo').disabled = historyIndex >= historyStack.length - 1;
+        }
+
+        function processAutoSubscriptions() {
+            const month = new Date().toISOString().slice(0, 7);
+            let changed = false;
+            subscriptions.forEach(sub => {
+                const exists = appData[sub.mode].transactions.some(t => t.isSub && t.subId === sub.id && t.date.startsWith(month));
+                if (!exists) {
+                    appData[sub.mode].transactions.push({
+                        id: Date.now() + Math.random(), date: new Date().toISOString().slice(0, 10),
+                        type: 'expense', paymentMethod: sub.paymentMethod || 'カード', category: sub.category, amount: sub.amount, memo: sub.name, isSub: true, subId: sub.id, isEstimate: false
+                    });
+                    changed = true;
+                }
+            });
+            if(changed) saveState();
+        }
+
+        function updateMemoSuggestions() {
+            const memoList = [];
+            const seen = new Set();
+            const allTxs = [];
+
+            ['family', 'personal', 'tatekae'].forEach(mode => {
+                if (appData[mode] && appData[mode].transactions) {
+                    allTxs.push(...appData[mode].transactions);
+                }
+            });
+
+            allTxs.sort((a, b) => {
+                if (b.date !== a.date) return b.date.localeCompare(a.date);
+                return b.id - a.id;
+            });
+
+            for (const t of allTxs) {
+                if (t.memo && t.memo.trim() !== '') {
+                    const trimmed = t.memo.trim();
+                    if (!seen.has(trimmed)) {
+                        seen.add(trimmed);
+                        memoList.push(trimmed);
+                        if (memoList.length >= 5) break; 
+                    }
+                }
+            }
+
+            const dataList = document.getElementById('memo-suggestions');
+            if (dataList) {
+                dataList.innerHTML = memoList.map(m => `<option value="${m}">`).join('');
+            }
+        }
+
+        function switchView(viewName) {
+            currentView = viewName;
+            document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden-view'));
+            document.getElementById(`view-${viewName}`).classList.remove('hidden-view');
+
+            ['home', 'history', 'budget', 'calendar', 'settings', 'trend'].forEach(nav => {
+                const el = document.getElementById(`nav-${nav}`);
+                if(el) { el.classList.remove('opacity-100', 'text-sky-500'); el.classList.add('opacity-50'); }
+            });
+            const activeNav = document.getElementById(`nav-${viewName}`);
+            if(activeNav) { activeNav.classList.remove('opacity-50'); activeNav.classList.add('opacity-100', 'text-sky-500'); }
+
+            const tabContainer = document.getElementById('header-tabs-container');
+            if (viewName === 'calendar') {
+                tabContainer.classList.add('opacity-0', 'pointer-events-none', 'invisible');
+            } else {
+                tabContainer.classList.remove('opacity-0', 'pointer-events-none', 'invisible');
+            }
+
+            if(viewName === 'home') updateAllData();
+            if(viewName === 'budget') renderBudget();
+            if(viewName === 'trend') renderTrend();
+            if(viewName === 'calendar') {
+                selectedCalendarDateStr = null; 
+                renderCalendar();
+                document.getElementById('calendar-day-detail-list').innerHTML = '<p class="text-xs opacity-50 text-center py-4">日付をタップすると明細が表示されます</p>';
+            }
+            if(viewName === 'settings') renderSettings();
+        }
+
+        function switchTab(mode) {
+            currentMode = mode;
+            ['family', 'personal', 'tatekae', 'calc'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                btn.className = (t === mode) ? 
+                    "flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg bg-[var(--theme-card)] shadow-sm text-sky-500 transition-all select-none truncate" : 
+                    "flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg opacity-60 transition-all select-none truncate";
+            });
+            
+            if (mode === 'tatekae') {
+                document.getElementById('home-standard-sections').classList.add('hidden');
+                document.getElementById('tatekae-dashboard-sections').classList.remove('hidden');
+                document.getElementById('calc-dashboard-sections').classList.add('hidden');
+            } else if (mode === 'calc') {
+                document.getElementById('home-standard-sections').classList.add('hidden');
+                document.getElementById('tatekae-dashboard-sections').classList.add('hidden');
+                document.getElementById('calc-dashboard-sections').classList.remove('hidden');
+            } else {
+                document.getElementById('home-standard-sections').classList.remove('hidden');
+                document.getElementById('tatekae-dashboard-sections').classList.add('hidden');
+                document.getElementById('calc-dashboard-sections').classList.add('hidden');
+            }
+            
+            updateAllData();
+            if(currentView === 'budget') renderBudget();
+            if(currentView === 'trend') renderTrend();
+            if(currentView === 'settings') renderSettings();
+            if(currentView === 'calendar') renderCalendar();
+        }
+
+        function loadCalcSettingsUI() {
+            document.getElementById('calc-fixed-shota').value = calcSettings.fixedShota;
+            document.getElementById('calc-fixed-shiho').value = calcSettings.fixedShiho;
+            document.getElementById('calc-food').value = calcSettings.food;
+            document.getElementById('calc-ratio-shota').value = calcSettings.ratioShota;
+            document.getElementById('calc-ratio-shiho').value = calcSettings.ratioShiho;
+        }
+
+        function runFamilyCalc() {
+            const amtInput = document.getElementById('calc-amt').value;
+            let total = 0;
+            try {
+                const sanitized = amtInput.replace(/[０-９＋－＊／（）]/g, function(s) {
+                    return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+                }).replace(/[,、\s]/g, '');
+                if (!/^[\d\+\-\*\/\.\(\)]+$/.test(sanitized) || sanitized === '') throw new Error();
+                total = new Function('return ' + sanitized)();
+            } catch (e) {
+                alert("正しい金額や計算式を入力してください。"); return;
+            }
+            if (!total || total <= 0) { alert("計算できませんでした。"); return; }
+            
+            calcSettings.fixedShota = parseInt(document.getElementById('calc-fixed-shota').value) || 0;
+            calcSettings.fixedShiho = parseInt(document.getElementById('calc-fixed-shiho').value) || 0;
+            calcSettings.food = parseInt(document.getElementById('calc-food').value) || 0;
+            calcSettings.ratioShota = parseInt(document.getElementById('calc-ratio-shota').value) || 0;
+            calcSettings.ratioShiho = parseInt(document.getElementById('calc-ratio-shiho').value) || 0;
+            saveState();
+
+            const out = document.getElementById('calc-out');
+            const container = document.getElementById('calc-result-container');
+            
+            const fShota = calcSettings.fixedShota;
+            const fShiho = calcSettings.fixedShiho;
+            const food = calcSettings.food;
+            const rShota = calcSettings.ratioShota / 100;
+            const rShiho = calcSettings.ratioShiho / 100;
+
+            const fixedTotal = fShota + fShiho;
+            const variable = total - fixedTotal;
+            const shotaVar = variable * rShota;
+            const shihoVar = variable * rShiho;
+            
+            const s = fShota + shotaVar + food;
+            const sh = fShiho + shihoVar + food;
+            const sum = s + sh;
+            
+            const resultText = `📊 森國家 家計計算結果\nカード請求額：${Math.round(total).toLocaleString()}円\n\n固定費：${(fixedTotal).toLocaleString()}円\n・翔太：${fShota.toLocaleString()}円\n・しほ：${fShiho.toLocaleString()}円\n\n変動費：${Math.round(variable).toLocaleString()}円\n・翔太(${calcSettings.ratioShota}%)：${Math.round(shotaVar).toLocaleString()}円\n・しほ(${calcSettings.ratioShiho}%)：${Math.round(shihoVar).toLocaleString()}円\n\n💰 今回の振込額\n・翔太：${Math.round(s).toLocaleString()}円\n・しほ：${Math.round(sh).toLocaleString()}円\n\n✅ 合計確認：${Math.round(sum).toLocaleString()}円`;
+            out.textContent = resultText;
+            
+            const encodedText = encodeURIComponent(resultText);
+            document.getElementById('line-share-btn').onclick = function() { window.open(`https://line.me/R/msg/text/?text=${encodedText}`, '_blank'); };
+            
+            const calcTx = {
+                id: Date.now(),
+                date: new Date().toISOString().slice(0, 10),
+                type: 'expense',
+                paymentMethod: '振込',
+                category: '家計精算',
+                amount: Math.round(sum),
+                memo: `翔太:¥${Math.round(s).toLocaleString()} / しほ:¥${Math.round(sh).toLocaleString()}`,
+                isEstimate: false,
+                shotaAmount: Math.round(s),
+                shihoAmount: Math.round(sh)
+            };
+            appData.calc.transactions.push(calcTx);
+            saveState();
+            
+            container.classList.remove('hidden');
+        }
+
+        function deleteTrip(id) {
+            if(!id) {
+                alert("古いデータのため出張記録から削除できません。"); return;
+            }
+            if(confirm("この出張記録と、紐づく日当収入をすべて削除しますか？")) {
+                appData[currentMode].trips = appData[currentMode].trips.filter(t => t.id !== id);
+                appData[currentMode].transactions = appData[currentMode].transactions.filter(t => t.id !== id);
+                saveState();
+                updateAllData();
+            }
+        }
+
+        function updateAllData() {
+            if (currentMode === 'calc') return;
+
+            const tripSec = document.getElementById('trip-dashboard-section');
+            if (tripSec) {
+                if (currentMode === 'personal') {
+                    tripSec.classList.remove('hidden');
+                } else {
+                    tripSec.classList.add('hidden');
+                }
+            }
+
+            const data = appData[currentMode];
+            let income = 0, expense = 0, tripIncome = 0, tripExpense = 0, cardExpense = 0;
+            let expensesByCategory = {};
+            
+            let memberBalances = {};
+            tatekaeMembers.forEach(m => memberBalances[m] = 0);
+
+            const now = new Date();
+            const curYear = now.getFullYear();
+            const curMonth = now.getMonth();
+            const prevDate = new Date(curYear, curMonth - 1, 1);
+            const prevYear = prevDate.getFullYear();
+            const prevMonth = prevDate.getMonth();
+
+            const curMonthPrefix = `${curYear}-${String(curMonth + 1).padStart(2, '0')}`;
+            const prevMonthPrefix = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}`;
+
+            data.transactions.forEach(t => {
+                if (t.isEstimate) return; 
+
+                if (currentMode === 'tatekae' && !t.settled && !t.isSettlementRecord) {
+                    let amount = t.amount;
+                    let isSplit = (t.burden === 'split');
+                    
+                    if (memberBalances[t.payer] !== undefined) memberBalances[t.payer] += amount;
+                    
+                    if (isSplit) {
+                        let splitAmt = amount / tatekaeMembers.length;
+                        tatekaeMembers.forEach(m => {
+                            if(memberBalances[m] !== undefined) memberBalances[m] -= splitAmt;
+                        });
+                    } else {
+                        if(memberBalances[t.burden] !== undefined) memberBalances[t.burden] -= amount;
+                    }
+                }
+
+                const txMonthPrefix = t.date.slice(0, 7);
+
+                if(t.type === 'income') {
+                    if (txMonthPrefix === prevMonthPrefix) {
+                        income += t.amount;
+                    }
+                    if(t.category.includes('出張') || t.category.includes('日当')) tripIncome += t.amount;
+                } else {
+                    if (txMonthPrefix === curMonthPrefix) {
+                        if (!t.excludeFromBudget) {
+                            expense += t.amount;
+                            expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+                            if(t.paymentMethod && t.paymentMethod !== '現金') {
+                                cardExpense += t.amount;
+                            }
+                        }
+                    }
+                    if(t.category.includes('出張')) tripExpense += t.amount;
+                }
+            });
+
+            document.getElementById('display-balance').innerText = `¥${(income - expense).toLocaleString()}`;
+            document.getElementById('display-income').innerText = `¥${income.toLocaleString()}`;
+            document.getElementById('display-expense').innerText = `¥${expense.toLocaleString()}`;
+            document.getElementById('display-card-expense').innerText = `¥${cardExpense.toLocaleString()}`;
+            
+            const tripNet = tripIncome - tripExpense;
+            document.getElementById('trip-income').innerText = `¥${tripIncome.toLocaleString()}`;
+            document.getElementById('trip-expense').innerText = `¥${tripExpense.toLocaleString()}`;
+            document.getElementById('trip-net').innerText = `${tripNet >= 0 ? '+' : ''}¥${tripNet.toLocaleString()}`;
+            document.getElementById('trip-net').className = `text-2xl font-black ${tripNet >= 0 ? 'text-sky-500' : 'text-rose-500'} tabular-nums`;
+
+            let tripHtml = '';
+            const sortedTrips = [...appData[currentMode].trips].sort((a, b) => new Date(b.start) - new Date(a.start));
+            
+            if (sortedTrips.length > 0) {
+                sortedTrips.forEach(trip => {
+                    let tExpense = 0;
+                    appData[currentMode].transactions.forEach(tx => {
+                        if (tx.type === 'expense' && tx.date >= trip.start && tx.date <= trip.end) {
+                            if (tx.category.includes('出張')) {
+                                tExpense += tx.amount;
+                            }
+                        }
+                    });
+                    let tNet = (trip.allowance || 0) - tExpense;
+                    tripHtml += `
+                    <div class="bg-black/5 p-3.5 rounded-2xl flex justify-between items-center mb-2 border border-gray-400/10">
+                        <div>
+                            <p class="font-bold text-xs">${trip.memo || '出張'} <span class="opacity-50 text-[10px] ml-1">${trip.start} 〜 ${trip.end}</span></p>
+                            <p class="text-[11px] opacity-70 mt-0.5">日当: ¥${(trip.allowance || 0).toLocaleString()} / 経費: ¥${tExpense.toLocaleString()}</p>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <p class="font-bold text-sm ${tNet >= 0 ? 'text-sky-500' : 'text-rose-500'} tabular-nums">${tNet >= 0 ? '+' : ''}¥${tNet.toLocaleString()}</p>
+                            <button onclick="deleteTrip(${trip.id})" class="text-[10px] bg-rose-500/10 text-rose-500 px-2.5 py-1 rounded-lg mt-1 active:scale-95 transition-all font-bold">削除</button>
+                        </div>
+                    </div>`;
+                });
+            } else {
+                tripHtml = '<p class="text-xs opacity-50 text-center py-4 font-bold">出張履歴はありません</p>';
+            }
+            const tripListContainer = document.getElementById('trip-history-list');
+            if(tripListContainer) tripListContainer.innerHTML = tripHtml;
+
+            if (currentMode === 'tatekae') {
+                let tatekaeHtml = '';
+                let hasUnsettled = false;
+                
+                Object.keys(memberBalances).forEach(m => {
+                    let bal = Math.round(memberBalances[m]);
+                    if (bal !== 0) hasUnsettled = true;
+                    
+                    let statusLabel = bal > 0 
+                        ? `<span class="bg-sky-500/15 text-sky-500 px-2.5 py-1 rounded-lg text-xs font-black tabular-nums">+¥${bal.toLocaleString()} (受取)</span>`
+                        : bal < 0 
+                        ? `<span class="bg-rose-500/15 text-rose-500 px-2.5 py-1 rounded-lg text-xs font-black tabular-nums">-¥${Math.abs(bal).toLocaleString()} (支払)</span>`
+                        : `<span class="opacity-50 text-xs font-bold">¥0 (精算済)</span>`;
+                        
+                    tatekaeHtml += `
+                        <div class="flex justify-between items-center py-2.5">
+                            <span class="font-black text-sm">${m}</span>
+                            ${statusLabel}
+                        </div>`;
+                });
+                
+                if(!hasUnsettled) tatekaeHtml = `<div class="text-center opacity-50 py-4 text-xs font-black">✨ すべて精算済です (相殺0円)</div>`;
+                document.getElementById('tatekae-balances-list').innerHTML = tatekaeHtml;
+            }
+
+            if(currentMode !== 'tatekae' && currentView === 'home') updateChart(expensesByCategory);
+            renderHistory(data.transactions);
+            updateMemoSuggestions();
+        }
+
+        let lastRenderedBudgetTotals = { expense: 0, estimate: 0, budget: 0 };
+
+        function changeBudgetMonth(diff) {
+            currentBudgetMonth += diff;
+            if (currentBudgetMonth < 0) { currentBudgetMonth = 11; currentBudgetYear--; }
+            else if (currentBudgetMonth > 11) { currentBudgetMonth = 0; currentBudgetYear++; }
+            renderBudget();
+        }
+
+        function shareBudgetLINE() {
+            const expense = lastRenderedBudgetTotals.expense;
+            const estimate = lastRenderedBudgetTotals.estimate;
+            const combined = expense + estimate;
+            const budget = lastRenderedBudgetTotals.budget;
+            
+            const text = `📊 ${currentBudgetYear}年${currentBudgetMonth + 1}月 ${currentMode === 'family' ? '家族' : '個人'}予算状況\n`
+                       + `────────────────\n`
+                       + `🏦 設定予算: ¥${budget.toLocaleString()}\n`
+                       + `📉 確定支出: ¥${expense.toLocaleString()}\n`
+                       + `📅 出費予定: ¥${estimate.toLocaleString()}\n`
+                       + `📈 支出見込: ¥${combined.toLocaleString()}\n`
+                       + `────────────────\n`
+                       + `💡 残額見込: ¥${(budget - combined).toLocaleString()}`;
+            
+            window.open(`https://line.me/R/msg/text/?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        function renderBudget() {
+            if (currentMode === 'tatekae' || currentMode === 'calc') {
+                document.getElementById('budget-content').classList.add('hidden');
+                document.getElementById('tatekae-budget-msg').classList.remove('hidden');
+                document.getElementById('tatekae-budget-msg').innerHTML = currentMode === 'tatekae' ? '立替管理では予算設定は不要です。' : '森國計算モードでは予算設定は不要です。';
+                document.getElementById('budget-month-title').innerText = '予算計画';
+                return;
+            }
+            document.getElementById('budget-content').classList.remove('hidden');
+            document.getElementById('tatekae-budget-msg').classList.add('hidden');
+            
+            document.getElementById('budget-month-title').innerText = `${currentBudgetYear}年${currentBudgetMonth + 1}月 予算管理`;
+
+            const btnEdit = document.getElementById('btn-budget-edit');
+            btnEdit.innerText = isBudgetEditing ? "完了" : "編集";
+            btnEdit.className = isBudgetEditing ? "text-xs btn-inverse px-3.5 py-1.5 rounded-lg font-bold" : "text-xs glass-input px-3.5 py-1.5 rounded-lg font-bold transition-all";
+
+            const data = appData[currentMode];
+            let expensesByCategory = {};
+            let estimatesByCategory = {};
+            let totalExpense = 0;
+            let totalEstimate = 0;
+
+            data.transactions.forEach(t => {
+                if(t.type === 'expense' && !t.excludeFromBudget) {
+                    const d = new Date(t.date);
+                    if (d.getFullYear() === currentBudgetYear && d.getMonth() === currentBudgetMonth) {
+                        if (t.isEstimate) {
+                            estimatesByCategory[t.category] = (estimatesByCategory[t.category] || 0) + t.amount;
+                            totalEstimate += t.amount;
+                        } else {
+                            expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+                            totalExpense += t.amount;
+                        }
+                    }
+                }
+            });
+
+            let totalBudget = 0;
+            let listHtml = '';
+            categories.forEach(c => {
+                const budget = data.budgets[c.name] || 0;
+                totalBudget += budget;
+                const expense = expensesByCategory[c.name] || 0;
+                const estimate = estimatesByCategory[c.name] || 0;
+                const combined = expense + estimate;
+
+                const ratio = budget > 0 ? Math.min((expense / budget) * 100, 100) : (expense > 0 ? 100 : 0);
+                const combinedRatio = budget > 0 ? Math.min((combined / budget) * 100, 100) : (combined > 0 ? 100 : 0);
+                
+                // 残り金額の計算
+                const remaining = budget - combined;
+                
+                // 色分けロジック（80%未満:青, 80%以上:黄, 100%以上:赤）
+                let statusColor = 'text-blue-500'; // OK (青)
+                let barColor = 'bg-blue-500';      // OKバー色 (青)
+                
+                if (combinedRatio >= 100 && budget > 0) {
+                    statusColor = 'text-red-500';  // オーバー (赤)
+                    barColor = 'bg-red-500';
+                } else if (combinedRatio >= 80 && budget > 0) {
+                    statusColor = 'text-yellow-500'; // ギリギリ (黄)
+                    barColor = 'bg-yellow-500';
+                }
+
+                if (isBudgetEditing || budget > 0 || combined > 0) {
+                    listHtml += `
+                    <div class="glass-card p-4 rounded-2xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${c.color}"></span>
+                                <span class="font-bold text-xs">${c.name}</span>
+                            </div>
+                            ${isBudgetEditing ? 
+                                `<div class="flex items-center border border-gray-400/20 rounded-lg overflow-hidden bg-black/5">
+                                    <span class="px-2 text-xs opacity-60">¥</span>
+                                    <input type="number" data-cat-name="${c.name}" value="${budget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums">
+                                </div>` 
+                                : `<div class="text-right leading-tight">
+                                    <span class="text-sm font-black ${statusColor} tabular-nums">残: ¥${remaining.toLocaleString()}</span><br>
+                                    <span class="text-[10px] opacity-60 font-bold tabular-nums">支出: ¥${combined.toLocaleString()} / 予算: ¥${budget.toLocaleString()}</span>
+                                   </div>`
+                            }
+                        </div>
+                        ${!isBudgetEditing ? `
+                        <div class="w-full glass-input rounded-full h-2 relative overflow-hidden">
+                            <div class="absolute top-0 left-0 h-2 transition-all ${barColor}" style="width: ${combinedRatio}%"></div>
+                        </div>` : ''}
+                    </div>`;
+                }
+            });
+
+            document.getElementById('budget-category-list').innerHTML = listHtml;
+            
+            const totalCombined = totalExpense + totalEstimate;
+            const totalRatio = totalBudget > 0 ? Math.min((totalExpense / totalBudget) * 100, 100) : 0;
+            const totalCombinedRatio = totalBudget > 0 ? Math.min((totalCombined / totalBudget) * 100, 100) : 0;
+            
+            let totalBarColor = 'bg-sky-500';
+            const warnEl = document.getElementById('budget-warning-text');
+            warnEl.classList.add('hidden');
+            
+            if (totalCombinedRatio >= 100 && totalBudget > 0) {
+                totalBarColor = 'bg-rose-500';
+                warnEl.innerText = "⚠️ 予定支出を含めると予算を超過します！";
+                warnEl.className = "text-xs font-bold mt-2 text-right text-rose-500 flex justify-end";
+                warnEl.classList.remove('hidden');
+            } else if (totalCombinedRatio >= 80 && totalBudget > 0) {
+                totalBarColor = 'bg-amber-500';
+                warnEl.innerText = "⚠️ 予定支出を含めると予算上限が近いです";
+                warnEl.className = "text-xs font-bold mt-2 text-right text-amber-500 flex justify-end";
+                warnEl.classList.remove('hidden');
+            }
+
+            document.getElementById('budget-total-text').innerText = `¥${totalExpense.toLocaleString()} / ¥${totalBudget.toLocaleString()}`;
+            document.getElementById('budget-estimate-text').innerText = `予想計: ¥${totalCombined.toLocaleString()}`;
+            
+            document.getElementById('budget-total-bar').style.width = `${totalRatio}%`;
+            document.getElementById('budget-total-est-bar').style.width = `${totalCombinedRatio}%`;
+            document.getElementById('budget-total-bar').className = `absolute top-0 left-0 h-2.5 rounded-full transition-all duration-300 ${totalBarColor}`;
+
+            lastRenderedBudgetTotals = { expense: totalExpense, estimate: totalEstimate, budget: totalBudget };
+        }
+
+        function toggleBudgetEdit() {
+            if (isBudgetEditing) {
+                const inputs = document.querySelectorAll('.budget-input');
+                inputs.forEach(input => {
+                    const catName = input.getAttribute('data-cat-name');
+                    appData[currentMode].budgets[catName] = parseInt(input.value, 10) || 0;
+                });
+                saveState();
+            }
+            isBudgetEditing = !isBudgetEditing;
+            renderBudget();
+        }
+
+        function renderTrend() {
+            if (currentMode === 'tatekae') {
+                if (trendChartInstance) trendChartInstance.destroy();
+                document.getElementById('view-trend').innerHTML = `<p class="text-xs text-center opacity-50 py-12 font-black">立替モードは推移に対応していません</p>`;
+                return;
+            } else if (currentMode === 'calc') {
+                renderCalcTrend();
+                return;
+            } else {
+                document.getElementById('view-trend').innerHTML = `
+                    <h2 class="text-base font-black opacity-90 tracking-tight px-1">先月収入 － 当月支出の収支推移</h2>
+                    <div class="glass-card p-5 rounded-3xl">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xs font-bold opacity-70">直近6ヶ月の収支比較</h3>
+                        </div>
+                        <div class="relative h-60 w-full px-1">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                        <p class="text-[11px] opacity-70 text-center mt-3 font-bold leading-relaxed">
+                            ※各月は「前月の確定収入」と「当月の確定支出」を比較した実質収支を表示しています。
+                        </p>
+                    </div>
+                `;
+            }
+
+            const data = appData[currentMode];
+            const monthlyData = {};
+            const today = new Date();
+            
+            for (let i = 5; i >= 0; i--) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                
+                const prevD = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+                const prevK = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, '0')}`;
+                
+                monthlyData[k] = { prevKey: prevK, income: 0, expense: 0, net: 0 };
+            }
+
+            data.transactions.forEach(t => {
+                if(t.isEstimate) return; 
+                const txKey = t.date.slice(0, 7);
+
+                if (monthlyData[txKey] && t.type === 'expense') {
+                    monthlyData[txKey].expense += t.amount;
+                }
+
+                Object.keys(monthlyData).forEach(curMonthKey => {
+                    if (monthlyData[curMonthKey].prevKey === txKey && t.type === 'income') {
+                        monthlyData[curMonthKey].income += t.amount;
+                    }
+                });
+            });
+
+            const labels = Object.keys(monthlyData).map(k => k.split('-')[1] + '月');
+            const incData = Object.values(monthlyData).map(v => v.income);
+            const expData = Object.values(monthlyData).map(v => v.expense);
+            const netData = Object.values(monthlyData).map(v => v.income - v.expense);
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChartInstance) trendChartInstance.destroy();
+            
+            trendChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            type: 'line',
+                            label: '差引収支 (残額)', 
+                            data: netData, 
+                            borderColor: '#38bdf8', 
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#38bdf8',
+                            tension: 0.25,
+                            order: 0
+                        },
+                        { 
+                            type: 'bar',
+                            label: '先月収入', 
+                            data: incData, 
+                            backgroundColor: '#10b981', 
+                            borderRadius: 6, 
+                            barPercentage: 0.65,
+                            order: 1
+                        },
+                        { 
+                            type: 'bar',
+                            label: '当月支出', 
+                            data: expData, 
+                            backgroundColor: '#f43f5e', 
+                            borderRadius: 6, 
+                            barPercentage: 0.65,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: { left: 4, right: 8, top: 10, bottom: 0 }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { font: { family: themeSettings.font, size: 10 }, color: themeSettings.text }, 
+                            grid: { color: 'rgba(128,128,128,0.1)' } 
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { font: { family: themeSettings.font, size: 11, weight: 'bold' }, color: themeSettings.text } 
+                        }
+                    },
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { boxWidth: 10, font: { family: themeSettings.font, size: 11, weight: 'bold' }, color: themeSettings.text } 
+                        } 
+                    }
+                }
+            });
+        }
+
+        function renderCalendar() {
+            document.getElementById('calendar-month').innerText = `${currentCalYear}年${currentCalMonth + 1}月`;
+            const daysInMonth = new Date(currentCalYear, currentCalMonth + 1, 0).getDate();
+            const firstDay = new Date(currentCalYear, currentCalMonth, 1).getDay();
+            
+            const actualExpenses = {};
+            const estimatedExpenses = {};
+            
+            if (currentMode !== 'calc') {
+                appData[currentMode].transactions.forEach(t => {
+                    if (t.type === 'expense') {
+                        const d = new Date(t.date);
+                        if (d.getFullYear() === currentCalYear && d.getMonth() === currentCalMonth) {
+                            if (t.isEstimate) estimatedExpenses[d.getDate()] = (estimatedExpenses[d.getDate()] || 0) + t.amount;
+                            else actualExpenses[d.getDate()] = (actualExpenses[d.getDate()] || 0) + t.amount;
+                        }
+                    }
+                });
+            }
+
+            const maxExpense = Object.keys(actualExpenses).length > 0 ? Math.max(1, ...Object.values(actualExpenses)) : 1;
+            let html = '';
+            for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${currentCalYear}-${String(currentCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                let isTrip = currentMode !== 'calc' && appData[currentMode].trips.some(trip => dateStr >= trip.start && dateStr <= trip.end);
+                let heatClass = 'glass-card border-none'; 
+                let amountHtml = '';
+                
+                if (actualExpenses[day]) {
+                    const ratio = actualExpenses[day] / maxExpense;
+                    if (ratio > 0.75) heatClass = 'heat-4';
+                    else if (ratio > 0.5) heatClass = 'heat-3';
+                    else if (ratio > 0.25) heatClass = 'heat-2 text-white';
+                    else heatClass = 'heat-1 text-inherit';
+                    amountHtml += `<span class="text-[9px] mt-0.5 font-extrabold leading-none tracking-tighter tabular-nums">¥${actualExpenses[day].toLocaleString()}</span>`;
+                }
+                if (estimatedExpenses[day]) {
+                    amountHtml += `<span class="text-[8px] text-amber-500 font-extrabold mt-0.5 leading-none tracking-tighter tabular-nums">(予¥${estimatedExpenses[day].toLocaleString()})</span>`;
+                }
+                
+                const borderClass = isTrip ? 'trip-day' : '';
+                const isSelected = (selectedCalendarDateStr === dateStr) ? 'ring-2 ring-sky-500 ring-offset-1' : '';
+
+                html += `<div onclick="selectCalendarDay('${dateStr}')" class="aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold cursor-pointer transition-all calendar-day-cell ${heatClass} ${borderClass} ${isSelected}">${day}${amountHtml}</div>`;
+            }
+            document.getElementById('calendar-grid').innerHTML = html;
+        }
+
+        function selectCalendarDay(dateStr) {
+            selectedCalendarDateStr = dateStr;
+            renderCalendar(); 
+
+            const dateObj = new Date(dateStr);
+            document.getElementById('calendar-day-detail-title').innerText = `${dateObj.getMonth() + 1}月${dateObj.getDate()}日の明細`;
+
+            const matchedTxs = appData[currentMode].transactions.filter(t => t.date === dateStr);
+            const listContainer = document.getElementById('calendar-day-detail-list');
+
+            if (matchedTxs.length === 0) {
+                listContainer.innerHTML = '<p class="text-xs opacity-50 text-center py-4 font-bold">この日のデータはありません</p>';
+                return;
+            }
+
+            listContainer.innerHTML = matchedTxs.map(t => {
+                const cat = categories.find(c => c.name === t.category) || { color: '#9CA3AF', icon: '🏷️' };
+                const badge = t.isEstimate ? `<span class="ml-1 text-[9px] bg-amber-500/20 text-amber-600 px-1.5 rounded font-bold">予定</span>` : '';
+                const excludeBadge = t.excludeFromBudget ? `<span class="ml-1 text-[9px] bg-sky-500/20 text-sky-600 px-1.5 py-0.5 rounded font-bold">予算外</span>` : '';
+                return `
+                    <div class="flex justify-between items-center glass-input p-3.5 rounded-2xl">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xl">${cat.icon}</span>
+                            <div class="text-xs">
+                                <p class="font-extrabold">${t.memo || t.category}${badge}${excludeBadge}</p>
+                                <p class="text-[10px] opacity-60 font-bold">${t.type === 'income' ? '収入' : t.paymentMethod}</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-black ${t.type === 'income' ? 'text-emerald-500' : ''} tabular-nums">
+                            ${t.type === 'income' ? '+' : '-'}¥${t.amount.toLocaleString()}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function changeMonth(diff) {
+            currentCalMonth += diff;
+            if (currentCalMonth < 0) { currentCalMonth = 11; currentCalYear--; }
+            else if (currentCalMonth > 11) { currentCalMonth = 0; currentCalYear++; }
+            selectedCalendarDateStr = null;
+            renderCalendar();
+            document.getElementById('calendar-day-detail-list').innerHTML = '<p class="text-xs opacity-50 text-center py-4 font-bold">日付をタップすると明細が表示されます</p>';
+        }
+
+        function renderHistory(transactions) {
+            const container = document.getElementById('history-list');
+            if(transactions.length === 0) { container.innerHTML = '<div class="p-8 text-center opacity-50 text-xs font-bold">データがありません</div>'; return; }
+            
+            const isTatekae = currentMode === 'tatekae';
+            const sorted = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            const grouped = {};
+            sorted.forEach(t => {
+                const d = new Date(t.date);
+                const monthKey = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+                if (!grouped[monthKey]) grouped[monthKey] = [];
+                grouped[monthKey].push(t);
+            });
+
+            let html = '';
+            let isFirst = true;
+
+            for (const [month, txs] of Object.entries(grouped)) {
+                const monthTotal = txs.reduce((sum, t) => sum + (t.type === 'expense' ? t.amount : 0), 0);
+                html += `<details class="mb-2.5 glass-card rounded-3xl overflow-hidden transition-all duration-300" ${isFirst ? 'open' : ''}>
+                    <summary class="p-3.5 px-4 text-xs font-bold cursor-pointer opacity-90 outline-none flex justify-between items-center bg-black/5 hover:bg-black/10 transition-colors">
+                        ${month} 
+                        <span class="text-[10px] opacity-70 bg-white/60 px-3 py-1 rounded-full font-bold tabular-nums">計 ${txs.length}件 / ¥${monthTotal.toLocaleString()}</span>
+                    </summary>
+                    <div class="px-1 py-1">`;
+                
+                html += txs.map(t => {
+                    const cat = categories.find(c => c.name === t.category) || { color: '#9CA3AF', icon: '🏷️' };
+                    const paymentBadge = (t.type === 'expense' && t.paymentMethod) 
+                        ? `<span class="ml-2 text-[9px] bg-black/5 px-1.5 py-0.5 rounded opacity-70 font-bold">${t.paymentMethod}</span>` : '';
+                    
+                    const natureBadge = t.isEstimate ? `<span class="ml-1 text-[9px] bg-amber-500/20 text-amber-600 px-1.5 py-0.5 rounded font-bold">予定</span>` : '';
+                    const excludeBadge = t.excludeFromBudget ? `<span class="ml-1 text-[9px] bg-sky-500/20 text-sky-600 px-1.5 py-0.5 rounded font-bold">予算外</span>` : '';
+
+                    let tatekaeBadge = '';
+                    let settleButton = '';
+
+                    if (isTatekae) {
+                        if (t.isSettlementRecord) {
+                            tatekaeBadge = `<div class="mt-1 flex items-center"><span class="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-600">✓ 精算記録</span></div>`;
+                        } else {
+                            tatekaeBadge = `
+                                <div class="mt-1 flex items-center space-x-2">
+                                    <span class="text-[10px] px-2 py-0.5 rounded font-bold ${t.settled ? 'opacity-50' : 'bg-sky-500/20 text-sky-500'}">
+                                        ${t.settled ? '✓ 精算済' : '！ 未精算'}
+                                    </span>
+                                    <span class="text-[10px] opacity-60 font-bold">${t.payer} ➔ ${t.burden === 'split' ? '割勘' : t.burden}</span>
+                                </div>`;
+                            if (!t.settled) {
+                                settleButton = `<button onclick="toggleSettlement(${t.id})" class="text-[10px] font-black bg-sky-500/10 text-sky-500 px-2.5 py-1 rounded-lg border border-sky-500/20 mt-1 active:scale-95 transition-all">精算する</button>`;
+                            }
+                        }
+                    }
+
+                    return `
+                    <div class="p-3.5 border-b border-gray-400/10 flex justify-between items-center group bg-transparent hover:bg-black/5 transition-colors">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm glass-input">${cat.icon}</div>
+                            <div>
+                                <p class="text-sm font-extrabold flex items-center">${t.memo || t.category}${paymentBadge}${natureBadge}${excludeBadge}</p>
+                                <p class="text-[11px] opacity-50 mt-0.5 font-bold">${t.date}</p>
+                                ${tatekaeBadge}
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="font-extrabold text-sm mb-0.5 ${t.type === 'income' ? 'text-emerald-500' : ''} tabular-nums">
+                                ${t.type === 'income' ? '+' : (isTatekae && t.isSettlementRecord ? '' : (isTatekae ? '' : '-'))}¥${t.amount.toLocaleString()}
+                            </span>
+                            ${settleButton}
+                            <div class="flex space-x-1 mt-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                <button onclick="editTransaction(${t.id})" class="hover:text-sky-500 text-xs p-1">✏️</button>
+                                <button onclick="deleteTransaction(${t.id})" class="hover:text-rose-500 text-xs p-1">🗑️</button>
+                            </div>
+                        </div>
+                    </div>`
+                }).join('');
+                
+                html += `</div></details>`;
+                isFirst = false;
+            }
+            container.innerHTML = html;
+        }
+
+        function generateSettlementHistory(originalTx) {
+            const amount = originalTx.amount;
+            const today = new Date().toISOString().slice(0, 10);
+            
+            if(originalTx.burden === 'split') {
+                const splitAmt = Math.round(amount / tatekaeMembers.length);
+                tatekaeMembers.forEach(m => {
+                    if(m !== originalTx.payer) {
+                        appData.tatekae.transactions.push({
+                            id: Date.now() + Math.random(), date: today, type: 'expense', paymentMethod: '現金', category: '立替',
+                            amount: splitAmt, memo: `【精算】${originalTx.memo || originalTx.category}`,
+                            payer: originalTx.payer, burden: m, settled: true, isSettlementRecord: true, isEstimate: false
+                        });
+                    }
+                });
+            } else {
+                appData.tatekae.transactions.push({
+                    id: Date.now() + Math.random(), date: today, type: 'expense', paymentMethod: '現金', category: '立替',
+                    amount: amount, memo: `【精算】${originalTx.memo || originalTx.category}`,
+                    payer: originalTx.payer, burden: originalTx.burden, settled: true, isSettlementRecord: true, isEstimate: false
+                });
+            }
+        }
+
+        function toggleSettlement(id) {
+            const t = appData.tatekae.transactions.find(x => x.id === id);
+            if (t && !t.settled) {
+                t.settled = true;
+                generateSettlementHistory(t);
+                saveState();
+                updateAllData();
+            }
+        }
+
+        function settleAll() {
+            const unsettled = appData.tatekae.transactions.filter(t => !t.settled && !t.isSettlementRecord);
+            if(unsettled.length === 0) { alert('未精算のデータはありません。'); return; }
+            if(confirm('未精算の立替をすべて「精算済」にしますか？')) {
+                unsettled.forEach(t => { t.settled = true; generateSettlementHistory(t); });
+                saveState(); updateAllData();
+            }
+        }
+
+        function updateChart(expensesObj) {
+            const ctx = document.getElementById('expenseChart').getContext('2d');
+            const sortedEntries = Object.entries(expensesObj).sort((a,b)=>b[1]-a[1]);
+            const labels = sortedEntries.map(e=>e[0]);
+            const dataValues = sortedEntries.map(e=>e[1]);
+            const bgColors = labels.map(label => (categories.find(c => c.name === label) || {color:'#9CA3AF'}).color);
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels.length > 0 ? labels : ['データなし'],
+                    datasets: [{
+                        data: dataValues.length > 0 ? dataValues : [1],
+                        backgroundColor: dataValues.length > 0 ? bgColors : ['rgba(128,128,128,0.2)'], borderWidth: 0,
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%' }
+            });
+
+            const listContainer = document.getElementById('expense-list-details');
+            if(sortedEntries.length > 0) {
+                listContainer.innerHTML = sortedEntries.map(([catName, amt]) => {
+                    const cat = categories.find(c => c.name === catName) || {color:'#9CA3AF', icon:'🏷️'};
+                    return `
+                    <div class="flex justify-between items-center py-2 border-b border-gray-400/10 last:border-0">
+                        <div class="flex items-center text-xs font-bold opacity-80">
+                            <span class="w-3 h-3 rounded-full mr-2.5" style="background-color: ${cat.color}"></span>
+                            <span class="mr-2">${cat.icon}</span>${catName}
+                        </div>
+                        <span class="text-xs font-bold tabular-nums">¥${amt.toLocaleString()}</span>
+                    </div>`;
+                }).join('');
+            } else {
+                listContainer.innerHTML = '<p class="text-xs opacity-50 text-center py-3 font-bold">実績がありません</p>';
+            }
+        }
+
+        function updateCategorySelect() {
+            document.getElementById('category').innerHTML = categories.map(c => `<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+        }
+
+        function openModal(editId = null) {
+            if (paymentMethods.length === 0 && currentMode !== 'tatekae') {
+                alert("決済方法が1つも登録されていません。設定画面から追加してください。");
+                switchView('settings');
+                return;
+            }
+
+            document.getElementById('input-modal').classList.remove('hidden');
+            document.getElementById('input-modal').classList.add('flex');
+            document.body.classList.add('modal-open');
+            updateCategorySelect();
+            initSelectMenus(); 
+            
+            if (currentMode === 'tatekae') {
+                document.getElementById('tatekae-fields').classList.remove('hidden');
+                document.getElementById('type-container').classList.add('hidden');
+                document.getElementById('status-type-container').classList.add('hidden'); 
+                document.getElementById('category').value = '立替';
+            } else {
+                document.getElementById('tatekae-fields').classList.add('hidden');
+                document.getElementById('type-container').classList.remove('hidden');
+                document.getElementById('status-type-container').classList.remove('hidden');
+            }
+
+            document.getElementById('payment-method-container').style.display = 'block';
+
+            if (editId) {
+                document.getElementById('modal-title').innerText = "履歴の修正";
+                document.getElementById('submit-btn').innerText = "更新する";
+                document.getElementById('edit-id').value = editId;
+                const t = appData[currentMode].transactions.find(x => x.id === editId);
+                
+                const typeRadio = document.querySelector(`input[name="type"][value="${t.type}"]`);
+                if(typeRadio) {
+                    typeRadio.checked = true;
+                    if(t.type === 'income') document.getElementById('payment-method-container').style.display = 'none';
+                }
+
+                const natureVal = t.isEstimate ? 'estimate' : 'actual';
+                document.querySelector(`input[name="nature"][value="${natureVal}"]`).checked = true;
+                
+                document.getElementById('date').value = t.date;
+                document.getElementById('amount').value = t.amount;
+                document.getElementById('category').value = t.category;
+                document.getElementById('memo').value = t.memo;
+                
+                if (t.paymentMethod) {
+                    document.getElementById('payment-method').value = t.paymentMethod;
+                    const pointContainer = document.getElementById('point-budget-option-container');
+                    if (t.paymentMethod.includes('ポイント')) {
+                        pointContainer.classList.remove('hidden');
+                        document.querySelector(`input[name="point-budget"][value="${t.excludeFromBudget ? 'exclude' : 'deduct'}"]`).checked = true;
+                    } else {
+                        pointContainer.classList.add('hidden');
+                    }
+                }
+
+                if (currentMode === 'tatekae' && !t.isSettlementRecord) {
+                    if(t.payer) document.getElementById('tatekae-payer').value = t.payer;
+                    if(t.burden) document.getElementById('tatekae-burden').value = t.burden;
+                    if(t.settled !== undefined) {
+                        document.querySelector(`input[name="tatekae-status"][value="${t.settled ? 'settled' : 'unsettled'}"]`).checked = true;
+                    }
+                }
+
+            } else {
+                document.getElementById('modal-title').innerText = "支出・収入の入力";
+                document.getElementById('submit-btn').innerText = "保存する";
+                document.getElementById('edit-id').value = "";
+                document.getElementById('transaction-form').reset();
+                document.getElementById('date').valueAsDate = new Date();
+                document.getElementById('payment-method').value = paymentMethods[0] || '現金';
+                document.querySelector('input[name="nature"][value="actual"]').checked = true;
+
+                if (currentMode === 'tatekae') {
+                    document.getElementById('tatekae-payer').value = tatekaeMembers[0] || '';
+                    document.getElementById('tatekae-burden').value = 'split';
+                    document.querySelector(`input[name="tatekae-status"][value="unsettled"]`).checked = true;
+                }
+                document.getElementById('point-budget-option-container').classList.add('hidden');
+                document.querySelector(`input[name="point-budget"][value="deduct"]`).checked = true;
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+            if(modalId === 'input-modal' || modalId === 'trip-modal') {
+                document.getElementById(modalId).classList.remove('flex');
+            }
+            document.body.classList.remove('modal-open');
+        }
+
+        async function preprocessImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+                        const contrast = 1.5; 
+                        
+                        for (let i = 0; i < data.length; i += 4) {
+                            let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                            avg = (avg - 128) * contrast + 128;
+                            avg = Math.max(0, Math.min(255, avg));
+                            data[i] = avg; data[i+1] = avg; data[i+2] = avg;
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function processOCR(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const btn = document.getElementById('ocr-btn');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 解析中...`;
+            btn.disabled = true;
+
+            try {
+                const preprocessedDataUrl = await preprocessImage(file);
+                const worker = await Tesseract.createWorker(['jpn', 'eng']);
+                const ret = await worker.recognize(preprocessedDataUrl);
+                const text = ret.data.text;
+                await worker.terminate();
+
+                let maxNum = 0;
+                const lines = text.split('\n');
+                
+                lines.forEach(line => {
+                    const cleanLine = line.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).trim();
+                    if (/(tel|電話|fax|〒|番号|-)/i.test(cleanLine)) return;
+                    if (/(年|月|日)/.test(cleanLine)) return;
+
+                    const commaMatches = cleanLine.match(/\d{1,3}(,\d{3})+/g);
+                    if (commaMatches) {
+                        commaMatches.forEach(m => {
+                            const val = parseInt(m.replace(/,/g, ''), 10);
+                            if (val > maxNum && val < 10000000) maxNum = val;
+                        });
+                    } else {
+                        const numMatches = cleanLine.match(/\d+/g);
+                        if (numMatches) {
+                            numMatches.forEach(m => {
+                                const val = parseInt(m, 10);
+                                if (val > maxNum && val < 10000000) maxNum = val;
+                            });
+                        }
+                    }
+                });
+
+                if (maxNum > 0) {
+                    document.getElementById('amount').value = maxNum;
+                    alert(`✨ AI解析成功！\n合計金額と思われる「¥${maxNum.toLocaleString()}」を自動セットしました。`);
+                } else {
+                    alert('金額を読み取れませんでした。');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('読み取りに失敗しました。');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                event.target.value = ''; 
+            }
+        }
+
+        function saveTransaction(event) {
+            event.preventDefault();
+            const editId = document.getElementById('edit-id').value;
+            const amount = parseInt(document.getElementById('amount').value, 10);
+            if (isNaN(amount) || amount <= 0) { alert("正しい金額を入力してください"); return; }
+            
+            const selectedType = currentMode === 'tatekae' ? 'expense' : document.querySelector('input[name="type"]:checked').value;
+            const isEstimateSelected = currentMode === 'tatekae' ? false : (document.querySelector('input[name="nature"]:checked').value === 'estimate');
+
+            const paymentMethod = selectedType === 'expense' ? document.getElementById('payment-method').value : '現金';
+            
+            let excludeFromBudget = false;
+            if (selectedType === 'expense' && paymentMethod.includes('ポイント')) {
+                excludeFromBudget = document.querySelector('input[name="point-budget"]:checked').value === 'exclude';
+            }
+
+            const newData = {
+                id: editId ? Number(editId) : Date.now(),
+                date: document.getElementById('date').value,
+                type: selectedType,
+                paymentMethod: paymentMethod,
+                category: document.getElementById('category').value,
+                amount: amount,
+                memo: document.getElementById('memo').value,
+                isEstimate: isEstimateSelected,
+                excludeFromBudget: excludeFromBudget
+            };
+
+            if (currentMode === 'tatekae') {
+                const existingT = editId ? appData.tatekae.transactions.find(x => x.id === Number(editId)) : null;
+                if (existingT && existingT.isSettlementRecord) {
+                    newData.payer = existingT.payer;
+                    newData.burden = existingT.burden;
+                    newData.settled = true;
+                    newData.isSettlementRecord = true;
+                } else {
+                    newData.payer = document.getElementById('tatekae-payer').value;
+                    newData.burden = document.getElementById('tatekae-burden').value;
+                    newData.settled = document.querySelector('input[name="tatekae-status"]:checked').value === 'settled';
+                }
+            }
+
+            if (editId) {
+                const index = appData[currentMode].transactions.findIndex(x => x.id === Number(editId));
+                appData[currentMode].transactions[index] = newData;
+            } else {
+                appData[currentMode].transactions.push(newData);
+            }
+            saveState();
+            updateAllData();
+            closeModal('input-modal');
+        }
+
+        function editTransaction(id) { openModal(id); }
+        function deleteTransaction(id) {
+            if (confirm('削除しますか？')) {
+                appData[currentMode].transactions = appData[currentMode].transactions.filter(x => x.id !== id);
+                saveState();
+                updateAllData();
+            }
+        }
+
+        function updateTripSettings() {
+            tripSettings.daily = parseInt(document.getElementById('trip-daily-rate').value, 10) || 1800;
+            tripSettings.nightly = parseInt(document.getElementById('trip-nightly-rate').value, 10) || 2000;
+            saveState(); 
+        }
+
+        function openTripModal() {
+            document.getElementById('trip-modal').classList.remove('hidden');
+            document.getElementById('trip-modal').classList.add('flex');
+            document.body.classList.add('modal-open');
+            const today = new Date().toISOString().slice(0, 10);
+            document.getElementById('trip-start').value = today;
+            document.getElementById('trip-end').value = today;
+            document.getElementById('trip-memo').value = '';
+            
+            document.getElementById('trip-daily-rate').value = tripSettings.daily;
+            document.getElementById('trip-nightly-rate').value = tripSettings.nightly;
+            calculateTripPreview();
+        }
+
+        function calculateTripPreview() {
+            const startStr = document.getElementById('trip-start').value;
+            const endStr = document.getElementById('trip-end').value;
+            if(!startStr || !endStr) return;
+
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            const diffTime = end - start;
+            const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            if (days <= 0) {
+                document.getElementById('trip-days-calc').innerText = "0";
+                document.getElementById('trip-nights-calc').innerText = "0";
+                document.getElementById('trip-allowance-calc').innerText = "¥0";
+                return;
+            }
+
+            const nights = days - 1;
+            const allowance = (days * tripSettings.daily) + (nights * tripSettings.nightly);
+
+            document.getElementById('trip-days-calc').innerText = days;
+            document.getElementById('trip-nights-calc').innerText = nights;
+            document.getElementById('trip-allowance-calc').innerText = `¥${allowance.toLocaleString()}`;
+        }
+
+        function saveTrip(event) {
+            event.preventDefault();
+            const start = document.getElementById('trip-start').value;
+            const end = document.getElementById('trip-end').value;
+            const memo = document.getElementById('trip-memo').value;
+            
+            const days = parseInt(document.getElementById('trip-days-calc').innerText, 10);
+            if(days <= 0) { alert("終了日は開始日以降にしてください。"); return; }
+            const allowance = parseInt(document.getElementById('trip-allowance-calc').innerText.replace(/[^0-9]/g, ''), 10);
+
+            const tripId = Date.now();
+
+            appData[currentMode].trips.push({ id: tripId, start, end, memo, allowance });
+            
+            appData[currentMode].transactions.push({
+                id: tripId,
+                date: start,
+                type: 'income',
+                paymentMethod: '現金',
+                category: '出張日当',
+                amount: allowance,
+                memo: memo ? `${memo} (${days}日${days-1}泊)` : `出張 (${days}日${days-1}泊)`,
+                isEstimate: false
+            });
+
+            saveState();
+            updateAllData();
+            closeModal('trip-modal');
+            alert(`出張手当 ${allowance.toLocaleString()}円 を計上しました！`);
+        }
+
+        function exportBackup() {
+            const dataStr = localStorage.getItem(STORAGE_KEY) || "{}";
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `MoneyVault_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data && data.appData) {
+                        localStorage.setItem(STORAGE_KEY, e.target.result);
+                        alert("データの復元が完了しました。ページを再読み込みします。");
+                        location.reload();
+                    } else {
+                        alert("無効なバックアップファイルです。");
+                    }
+                } catch (err) {
+                    alert("ファイルの読み込みに失敗しました。");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; 
+        }
+
+        function exportCSV() {
+            if (currentMode === 'calc') {
+                alert('計算モードではエクスポートできません。'); return;
+            }
+            const data = appData[currentMode].transactions;
+            if (data.length === 0) { alert('エクスポートするデータがありません。'); return; }
+            
+            const headers = ['ID', '日付', '種類', '決済方法', 'カテゴリー', '金額', 'メモ', '立替者', '負担者', '精算ステータス', '出費予定フラグ'];
+            const rows = data.map(t => [
+                t.id, t.date, t.type === 'income' ? '収入' : '支出', t.paymentMethod || '', t.category, t.amount,
+                `"${(t.memo || '').replace(/"/g, '""')}"`, t.payer || '', t.burden || '',
+                t.settled !== undefined ? (t.settled ? '済' : '未') : '', t.isEstimate ? '予定' : '実績'
+            ]);
+            
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `kakeibo_${currentMode}_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderSettings() {
+            if (currentMode === 'tatekae' || currentMode === 'calc') {
+                document.getElementById('settings-content').classList.add('hidden');
+                document.getElementById('tatekae-settings-msg').classList.remove('hidden');
+                
+                document.getElementById('tatekae-settings-msg').innerHTML = currentMode === 'tatekae' 
+                    ? '立替管理用の設定はありません。<br><button onclick="exportCSV()" class="mt-4 bg-sky-500 text-white px-4 py-2.5 rounded-2xl text-sm font-bold shadow-md active:scale-95">CSVエクスポート</button>'
+                    : '森國計算モードの設定はありません。';
+                return;
+            }
+            
+            document.getElementById('settings-content').classList.remove('hidden');
+            document.getElementById('tatekae-settings-msg').classList.add('hidden');
+
+            const catList = document.getElementById('category-edit-list');
+            catList.innerHTML = categories.map((c, index) => `
+                <div class="flex justify-between items-center glass-input p-2.5 rounded-xl">
+                    <div class="flex items-center space-x-2 text-xs font-bold">
+                        <input type="color" value="${c.color}" onchange="updateCategoryColor(${index}, this.value)" class="w-8 h-8 rounded-lg border-0 p-0 cursor-pointer bg-transparent shrink-0">
+                        <span>${c.icon} ${c.name}</span>
+                    </div>
+                    <button onclick="deleteCategory('${c.name}')" class="text-rose-500 text-[10px] font-bold px-3 py-1 rounded-lg border border-rose-500/20 bg-rose-500/10 active:scale-95">削除</button>
+                </div>
+            `).join('');
+
+            document.getElementById('member-edit-list').innerHTML = tatekaeMembers.map(m => `
+                <div class="glass-input px-3 py-2 rounded-xl flex items-center space-x-2 text-xs font-bold">
+                    <span>${m}</span>
+                    <button onclick="deleteTatekaeMember('${m}')" class="text-rose-500 hover:text-rose-600 font-black">×</button>
+                </div>
+            `).join('');
+
+            document.getElementById('payment-edit-list').innerHTML = paymentMethods.map(p => `
+                <div class="bg-sky-500/10 border border-sky-500/20 px-3 py-2 rounded-xl flex items-center space-x-2 text-xs font-bold text-sky-500">
+                    <span>💳 ${p}</span>
+                    <button onclick="deletePaymentMethod('${p}')" class="text-sky-400 hover:text-sky-600">×</button>
+                </div>
+            `).join('');
+        }
+
+        function addCategory() {
+            const name = document.getElementById('new-cat-name').value;
+            const color = document.getElementById('new-cat-color').value;
+            const icon = document.getElementById('new-cat-icon').value || '🏷️';
+            if (name && !categories.find(c => c.name === name)) {
+                categories.push({ name, color, icon });
+                document.getElementById('new-cat-name').value = ''; document.getElementById('new-cat-icon').value = '';
+                saveState(); renderSettings(); updateCategorySelect();
+            }
+        }
+        function deleteCategory(name) {
+            if (confirm(`「${name}」を削除しますか？(履歴には残ります)`)) {
+                categories = categories.filter(c => c.name !== name);
+                saveState(); renderSettings(); updateCategorySelect();
+            }
+        }
+        
+        function updateCategoryColor(index, newColor) {
+            categories[index].color = newColor; 
+            saveState();                        
+            renderSettings();                   
+            updateCategorySelect();             
+            updateAllData();                    
+        }
+
+        function addTatekaeMember() {
+            const name = document.getElementById('new-member-name').value;
+            if (name && !tatekaeMembers.includes(name)) {
+                tatekaeMembers.push(name);
+                document.getElementById('new-member-name').value = '';
+                saveState(); renderSettings(); initSelectMenus(); updateAllData();
+            }
+        }
+        function deleteTatekaeMember(name) {
+            if(tatekaeMembers.length <= 1) { alert("最低1人は必要です"); return; }
+            if (confirm(`「${name}」を削除しますか？(既存の履歴の表示は残ります)`)) {
+                tatekaeMembers = tatekaeMembers.filter(m => m !== name);
+                saveState(); renderSettings(); initSelectMenus(); updateAllData();
+            }
+        }
+
+        function addPaymentMethod() {
+            const name = document.getElementById('new-payment-name').value;
+            if (name && !paymentMethods.includes(name)) {
+                paymentMethods.push(name);
+                document.getElementById('new-payment-name').value = '';
+                saveState(); renderSettings(); initSelectMenus();
+            }
+        }
+        function deletePaymentMethod(name) {
+            if(paymentMethods.length <= 1) { alert("最低1つの決済方法が必要です"); return; }
+            if (confirm(`「${name}」を削除しますか？`)) {
+                paymentMethods = paymentMethods.filter(p => p !== name);
+                saveState(); renderSettings(); initSelectMenus();
+            }
+        }
+
+        function renderCalcTrend() {
+            document.getElementById('view-trend').innerHTML = `
+                <h2 class="text-base font-black opacity-90 tracking-tight px-1 mb-2">家計振込額の推移</h2>
+                <div class="glass-card p-5 rounded-3xl">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-xs font-bold opacity-70">直近6回分</h3>
+                    </div>
+                    <div class="relative h-60 w-full px-1">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            `;
+            
+            const data = [...appData.calc.transactions].sort((a,b) => new Date(a.date) - new Date(b.date)).slice(-6);
+            const labels = data.map(t => { const d = new Date(t.date); return `${d.getMonth()+1}/${d.getDate()}`; });
+            const shotaData = data.map(t => t.shotaAmount || 0);
+            const shihoData = data.map(t => t.shihoAmount || 0);
+
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChartInstance) trendChartInstance.destroy();
+            
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '翔太', data: shotaData, borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.3 },
+                        { label: 'しほ', data: shihoData, borderColor: '#f43f5e', backgroundColor: '#f43f5e', tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { left: 4, right: 8, top: 10, bottom: 0 } },
+                    scales: { y: { beginAtZero: true, ticks: { font: { family: themeSettings.font } } } }
+                }
+            });
+        }
+
+        function checkWeeklyNotify() {
+            const lastCheck = localStorage.getItem('lastBudgetNotice');
+            const now = Date.now();
+            const oneWeek = 7 * 24 * 60 * 60 * 1000;
+            
+            if (!lastCheck || now - parseInt(lastCheck) > oneWeek) {
+                let totalBudget = 0;
+                let currentExpense = 0;
+                
+                Object.values(appData.personal.budgets || {}).forEach(v => totalBudget += v);
+                
+                const currentMonth = new Date().getMonth();
+                appData.personal.transactions.forEach(t => {
+                    if(t.type === 'expense' && !t.isEstimate) {
+                        const d = new Date(t.date);
+                        if (d.getMonth() === currentMonth) currentExpense += t.amount;
+                    }
+                });
+                
+                if (totalBudget > 0) {
+                    setTimeout(() => {
+                        alert(`📢 【週次 予算状況レポート】\n\n今月の設定予算: ¥${totalBudget.toLocaleString()}\n現在の確定支出: ¥${currentExpense.toLocaleString()}\n────────────────\n現在の残り予算: ¥${(totalBudget - currentExpense).toLocaleString()}`);
+                    }, 1000);
+                    
+                    localStorage.setItem('lastBudgetNotice', now.toString());
+                }
+            }
+        }
+    </script>
+</body>
+</html>
