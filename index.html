@@ -1311,11 +1311,17 @@
             let estimatesByCategory = {};
             let totalExpense = 0;
             let totalEstimate = 0;
+            
+            let txsByCategory = {};
 
             data.transactions.forEach(t => {
                 if(t.type === 'expense' && !t.excludeFromBudget) {
                     const d = new Date(t.date);
                     if (d.getFullYear() === currentBudgetYear && d.getMonth() === currentBudgetMonth) {
+                        
+                        if (!txsByCategory[t.category]) txsByCategory[t.category] = [];
+                        txsByCategory[t.category].push(t);
+
                         if (t.isEstimate) {
                             estimatesByCategory[t.category] = (estimatesByCategory[t.category] || 0) + t.amount;
                             totalEstimate += t.amount;
@@ -1339,45 +1345,71 @@
                 const ratio = budget > 0 ? Math.min((expense / budget) * 100, 100) : (expense > 0 ? 100 : 0);
                 const combinedRatio = budget > 0 ? Math.min((combined / budget) * 100, 100) : (combined > 0 ? 100 : 0);
                 
-                // 残り金額の計算
                 const remaining = budget - combined;
                 
-                // 色分けロジック（80%未満:青, 80%以上:黄, 100%以上:赤）
-                let statusColor = 'text-blue-500'; // OK (青)
-                let barColor = 'bg-blue-500';      // OKバー色 (青)
+                let statusColor = 'text-blue-500';
+                let barColor = 'bg-blue-500';
                 
                 if (combinedRatio >= 100 && budget > 0) {
-                    statusColor = 'text-red-500';  // オーバー (赤)
+                    statusColor = 'text-red-500';
                     barColor = 'bg-red-500';
                 } else if (combinedRatio >= 80 && budget > 0) {
-                    statusColor = 'text-yellow-500'; // ギリギリ (黄)
+                    statusColor = 'text-yellow-500';
                     barColor = 'bg-yellow-500';
                 }
 
                 if (isBudgetEditing || budget > 0 || combined > 0) {
+                    const catTxs = (txsByCategory[c.name] || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+                    let txListHtml = '';
+                    
+                    if (catTxs.length > 0) {
+                        txListHtml = `<div class="space-y-2">` + catTxs.map(t => {
+                            const badge = t.isEstimate ? `<span class="ml-1 text-[9px] bg-amber-500/20 text-amber-600 px-1.5 py-0.5 rounded font-bold">予定</span>` : '';
+                            return `
+                            <div class="flex justify-between items-center text-xs bg-black/5 p-2 rounded-lg">
+                                <div class="flex items-center space-x-2 opacity-90 min-w-0">
+                                    <span class="text-[10px] opacity-60 font-bold shrink-0">${t.date.slice(5).replace('-','/')}</span>
+                                    <span class="font-bold truncate">${t.memo || t.paymentMethod || '詳細なし'}${badge}</span>
+                                </div>
+                                <span class="font-black tabular-nums shrink-0 ml-2">¥${t.amount.toLocaleString()}</span>
+                            </div>`;
+                        }).join('') + `</div>`;
+                    } else {
+                        txListHtml = `<p class="text-[10px] opacity-50 text-center font-bold py-2">この月のデータはありません</p>`;
+                    }
+
                     listHtml += `
-                    <div class="glass-card p-4 rounded-2xl">
-                        <div class="flex justify-between items-center mb-2">
-                            <div class="flex items-center space-x-2">
-                                <span class="w-3 h-3 rounded-full" style="background-color: ${c.color}"></span>
-                                <span class="font-bold text-xs">${c.name}</span>
+                    <details class="glass-card rounded-2xl group transition-all duration-300 [&::-webkit-details-marker]:hidden">
+                        <summary class="p-4 list-none cursor-pointer outline-none">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-3 h-3 rounded-full shrink-0" style="background-color: ${c.color}"></span>
+                                    <span class="font-bold text-xs">${c.name}</span>
+                                </div>
+                                ${isBudgetEditing ? 
+                                    `<div class="flex items-center border border-gray-400/20 rounded-lg overflow-hidden bg-black/5" onclick="event.preventDefault();">
+                                        <span class="px-2 text-xs opacity-60">¥</span>
+                                        <input type="number" data-cat-name="${c.name}" value="${budget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums" onclick="event.stopPropagation();">
+                                    </div>` 
+                                    : `<div class="text-right leading-tight">
+                                        <span class="text-sm font-black ${statusColor} tabular-nums">残: ¥${remaining.toLocaleString()}</span><br>
+                                        <span class="text-[10px] opacity-60 font-bold tabular-nums">支出: ¥${combined.toLocaleString()} / 予算: ¥${budget.toLocaleString()}</span>
+                                       </div>`
+                                }
                             </div>
-                            ${isBudgetEditing ? 
-                                `<div class="flex items-center border border-gray-400/20 rounded-lg overflow-hidden bg-black/5">
-                                    <span class="px-2 text-xs opacity-60">¥</span>
-                                    <input type="number" data-cat-name="${c.name}" value="${budget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums">
-                                </div>` 
-                                : `<div class="text-right leading-tight">
-                                    <span class="text-sm font-black ${statusColor} tabular-nums">残: ¥${remaining.toLocaleString()}</span><br>
-                                    <span class="text-[10px] opacity-60 font-bold tabular-nums">支出: ¥${combined.toLocaleString()} / 予算: ¥${budget.toLocaleString()}</span>
-                                   </div>`
-                            }
-                        </div>
+                            ${!isBudgetEditing ? `
+                            <div class="w-full glass-input rounded-full h-2 relative overflow-hidden">
+                                <div class="absolute top-0 left-0 h-2 transition-all ${barColor}" style="width: ${combinedRatio}%"></div>
+                            </div>` : ''}
+                        </summary>
+                        
                         ${!isBudgetEditing ? `
-                        <div class="w-full glass-input rounded-full h-2 relative overflow-hidden">
-                            <div class="absolute top-0 left-0 h-2 transition-all ${barColor}" style="width: ${combinedRatio}%"></div>
+                        <div class="px-4 pb-4">
+                            <div class="pt-3 border-t border-gray-400/10">
+                                ${txListHtml}
+                            </div>
                         </div>` : ''}
-                    </div>`;
+                    </details>`;
                 }
             });
 
