@@ -710,7 +710,7 @@
         let paymentMethods = []; 
         let tatekaeMembers = ['夫（森國）', '妻'];
         let tripSettings = { daily: 1800, nightly: 2000 };
-        let themeSettings = { bg: '#f5f5f7', text: '#1d1d1f', font: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif', size: '16px' };
+        let themeSettings = { bg: '#f5f5f7', text: '#1d1d1f', font: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif', size: '16px' };
         let calcSettings = { fixedShota: 61000, fixedShiho: 41000, food: 14000, ratioShota: 50, ratioShiho: 50 };
         let subscriptions = []; 
 
@@ -1695,32 +1695,48 @@
                                     <span class="text-[10px] opacity-60 font-bold">${t.payer} ➔ ${t.burden === 'split' ? '割勘' : t.burden}</span>
                                 </div>`;
                             if (!t.settled) {
-                                settleButton = `<button onclick="toggleSettlement(${t.id})" class="text-[10px] font-black bg-sky-500/10 text-sky-500 px-2.5 py-1 rounded-lg border border-sky-500/20 mt-1 active:scale-95 transition-all">精算する</button>`;
+                                settleButton = `<button onclick="event.preventDefault(); toggleSettlement(${t.id})" class="text-[10px] font-black bg-sky-500/10 text-sky-500 px-2.5 py-1 rounded-lg border border-sky-500/20 mt-1 active:scale-95 transition-all">精算する</button>`;
                             }
                         }
                     }
 
                     return `
-                    <div class="p-3.5 border-b border-gray-400/10 flex justify-between items-center group bg-transparent hover:bg-black/5 transition-colors">
-                        <div class="flex items-start space-x-3">
-                            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm glass-input">${cat.icon}</div>
-                            <div>
-                                <p class="text-sm font-extrabold flex items-center">${t.memo || t.category}${paymentBadge}${natureBadge}${excludeBadge}</p>
-                                <p class="text-[11px] opacity-50 mt-0.5 font-bold">${t.date}</p>
-                                ${tatekaeBadge}
+                    <details class="group/tx border-b border-gray-400/10 last:border-0 transition-all duration-300">
+                        <summary class="p-3.5 flex justify-between items-center cursor-pointer bg-transparent hover:bg-black/5 transition-colors outline-none list-none [&::-webkit-details-marker]:hidden">
+                            <div class="flex items-start space-x-3 w-[70%]">
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm glass-input shrink-0">${cat.icon}</div>
+                                <div class="text-left min-w-0 w-full">
+                                    <p class="text-sm font-extrabold flex items-center flex-wrap gap-1">${t.memo || t.category}${natureBadge}${excludeBadge}</p>
+                                    <p class="text-[11px] opacity-50 mt-0.5 font-bold truncate">${t.date} ${paymentBadge}</p>
+                                    ${tatekaeBadge}
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-end shrink-0 pl-2 max-w-[30%]">
+                                <span class="font-extrabold text-sm mb-0.5 ${t.type === 'income' ? 'text-emerald-500' : ''} tabular-nums">
+                                    ${t.type === 'income' ? '+' : (isTatekae && t.isSettlementRecord ? '' : (isTatekae ? '' : '-'))}¥${t.amount.toLocaleString()}
+                                </span>
+                                ${settleButton}
+                            </div>
+                        </summary>
+                        <div class="px-4 pb-4 pt-1">
+                            <div class="bg-black/5 dark:bg-white/5 p-3.5 rounded-2xl space-y-2.5 text-xs">
+                                <div class="flex justify-between items-center"><span class="opacity-70 font-bold">カテゴリー</span><span class="font-black">${t.category}</span></div>
+                                ${t.type === 'expense' ? `<div class="flex justify-between items-center"><span class="opacity-70 font-bold">決済方法</span><span class="font-black">${t.paymentMethod || '現金'}</span></div>` : ''}
+                                <div class="flex justify-between items-center"><span class="opacity-70 font-bold">メモ</span><span class="font-black break-words text-right max-w-[65%]">${t.memo || '-'}</span></div>
+                                <div class="flex justify-between items-center"><span class="opacity-70 font-bold">種別</span><span class="font-black">${t.type === 'income' ? '収入' : '支出'} ${t.isEstimate ? '(予定)' : '(実績)'}</span></div>
+                                ${isTatekae && !t.isSettlementRecord ? `
+                                    <div class="flex justify-between items-center"><span class="opacity-70 font-bold">支払人(立替元)</span><span class="font-black">${t.payer}</span></div>
+                                    <div class="flex justify-between items-center"><span class="opacity-70 font-bold">負担人(請求先)</span><span class="font-black">${t.burden === 'split' ? '割勘（全員）' : t.burden}</span></div>
+                                ` : ''}
+                                ${t.type === 'expense' && t.excludeFromBudget ? `<div class="flex justify-between items-center"><span class="opacity-70 font-bold text-sky-500">予算設定</span><span class="font-black text-sky-500">予算に含めない</span></div>` : ''}
+                                
+                                <div class="flex justify-end space-x-2 pt-3 mt-1 border-t border-gray-400/20">
+                                    <button onclick="editTransaction(${t.id})" class="bg-sky-500/15 text-sky-600 hover:bg-sky-500/25 px-4 py-2.5 rounded-xl font-black transition-colors flex-1 flex justify-center items-center active:scale-95">✏️ 編集</button>
+                                    <button onclick="deleteTransaction(${t.id})" class="bg-rose-500/15 text-rose-600 hover:bg-rose-500/25 px-4 py-2.5 rounded-xl font-black transition-colors flex-1 flex justify-center items-center active:scale-95">🗑️ 削除</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="flex flex-col items-end">
-                            <span class="font-extrabold text-sm mb-0.5 ${t.type === 'income' ? 'text-emerald-500' : ''} tabular-nums">
-                                ${t.type === 'income' ? '+' : (isTatekae && t.isSettlementRecord ? '' : (isTatekae ? '' : '-'))}¥${t.amount.toLocaleString()}
-                            </span>
-                            ${settleButton}
-                            <div class="flex space-x-1 mt-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                                <button onclick="editTransaction(${t.id})" class="hover:text-sky-500 text-xs p-1">✏️</button>
-                                <button onclick="deleteTransaction(${t.id})" class="hover:text-rose-500 text-xs p-1">🗑️</button>
-                            </div>
-                        </div>
-                    </div>`
+                    </details>`
                 }).join('');
                 
                 html += `</div></details>`;
