@@ -103,7 +103,6 @@
             <div class="w-8"></div>
         </div>
 
-        <!-- 途切れない Apple 純正風 Segmented Control -->
         <div id="header-tabs-container" class="flex w-full max-w-full box-border p-1 bg-gray-500/15 rounded-xl border border-gray-400/20 transition-all duration-300 overflow-hidden">
             <button id="tab-family" onclick="switchTab('family')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg bg-[var(--theme-card)] shadow-sm text-sky-500 transition-all select-none truncate">家族</button>
             <button id="tab-personal" onclick="switchTab('personal')" class="flex-1 min-w-0 py-2 text-xs sm:text-sm font-bold rounded-lg opacity-60 transition-all select-none truncate">個人</button>
@@ -112,13 +111,11 @@
         </div>
     </header>
 
-    <!-- 左右の余白を十分に確保したコンテナ -->
     <main class="p-4 max-w-md mx-auto">
         <!-- ================= ホーム ================= -->
         <div id="view-home" class="app-view space-y-3.5">
             <div id="home-standard-sections" class="space-y-3.5">
                 
-                <!-- 残高カード（角丸と余白を完璧に最適化・はみ出しゼロ） -->
                 <section class="glass-card p-5 rounded-3xl relative overflow-hidden">
                     <p class="text-xs font-bold opacity-70 mb-1 tracking-wider uppercase flex items-center">
                         <span class="w-2 h-2 rounded-full bg-sky-500 mr-2"></span>今月の残額 (先月収入 - 今月支出)
@@ -154,7 +151,6 @@
                     </div>
                 </section>
 
-                <!-- 個人タブのみに表示する出張管理セクション -->
                 <section id="trip-dashboard-section" class="glass-card p-5 rounded-3xl relative overflow-hidden hidden border-l-4 border-sky-500">
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-sm font-black opacity-90 flex items-center tracking-wide">
@@ -289,7 +285,6 @@
         <div id="view-trend" class="app-view hidden-view space-y-3.5">
             <h2 class="text-base font-black opacity-90 tracking-tight px-1">先月収入 － 当月支出の収支推移</h2>
             
-            <!-- はみ出し対策を徹底したトレンドカード -->
             <div class="glass-card p-5 rounded-3xl">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-xs font-bold opacity-70">直近6ヶ月の収支比較</h3>
@@ -446,7 +441,7 @@
         </div>
     </main>
 
-    <!-- ================= どの口座に記録しますか？モーダル（大型＆スマート上部配置） ================= -->
+    <!-- ================= どの口座に記録しますか？モーダル ================= -->
     <div id="mode-select-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] hidden flex flex-col items-center justify-start pt-[max(env(safe-area-inset-top),28px)] px-4 transition-opacity" onclick="closeModal('mode-select-modal')">
         <div class="glass-card rounded-3xl p-6 w-full max-w-md mx-auto transform shadow-2xl relative" onclick="event.stopPropagation()">
             <div class="text-center mb-5">
@@ -654,7 +649,7 @@
         </div>
     </div>
 
-    <!-- ================= iPhone 17 ホームインジケーター配慮のボトムナビゲーション ================= -->
+    <!-- ================= ボトムナビゲーション ================= -->
     <nav class="glass-card border-t border-gray-400/20 fixed bottom-0 w-full px-2 pt-2 pb-[max(env(safe-area-inset-bottom),14px)] flex justify-between items-center z-30 shadow-2xl">
         <button onclick="switchView('home')" id="nav-home" class="flex flex-col items-center flex-1 transition-colors opacity-50 hover:opacity-100 text-inherit py-1.5">
             <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
@@ -792,7 +787,6 @@
                 };
             }
             checkWeeklyNotify();
-            
             updateAllData();
             
             setTimeout(() => {
@@ -1289,9 +1283,6 @@
             window.open(`https://line.me/R/msg/text/?text=${encodeURIComponent(text)}`, '_blank');
         }
 
-        // ==========================================
-        // 【修正】予算画面の描画処理（全体の置き換え）
-        // ==========================================
         function renderBudget() {
             if (currentMode === 'tatekae' || currentMode === 'calc') {
                 document.getElementById('budget-content').classList.add('hidden');
@@ -1315,14 +1306,13 @@
             let totalExpense = 0;
             let totalEstimate = 0;
             
-            // 先月の給与（実績）を計算
             const prevDate = new Date(currentBudgetYear, currentBudgetMonth - 1, 1);
             const prevMonthPrefix = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
             let actualSalary = 0;
 
             data.transactions.forEach(t => {
                 if (t.type === 'income' && t.date.startsWith(prevMonthPrefix)) {
-                    if (t.category === '給与' || (t.memo && t.memo.includes('給与'))) {
+                    if (/給与|給料|きゅうよ|きゅうりょう|賞与|ボーナス/.test(t.category + (t.memo || ''))) {
                         actualSalary += t.amount;
                     }
                 }
@@ -1341,24 +1331,31 @@
                 }
             });
 
-            // 基本予算26万円とし、先月給与との差額（上振れ/下振れ）を計算
-            const BASE_TOTAL = 260000;
-            const variance = actualSalary > 0 ? (actualSalary - BASE_TOTAL) : 0;
-            let totalBudgetForDisplay = 0;
-
-            let listHtml = '';
+            let totalBaseBudget = 0;
             categories.forEach(c => {
-                // 編集用に保存されているベースの予算
+                totalBaseBudget += (data.budgets[c.name] || 0);
+            });
+
+            const BASE_TOTAL = 260000;
+            const targetTotalBudget = actualSalary > 0 ? actualSalary : BASE_TOTAL;
+            const variance = targetTotalBudget - totalBaseBudget;
+
+            // 修正箇所：カテゴリー名に「自由」と付くものを優先して探す
+            let adjustCat = currentMode === 'personal' ? '自分自由費' : '家族自由費';
+            if (!categories.some(c => c.name === adjustCat)) {
+                const fallbackCat = categories.find(c => c.name.includes('自由'));
+                adjustCat = fallbackCat ? fallbackCat.name : (categories.length > 0 ? categories[0].name : '');
+            }
+
+            let totalBudgetForDisplay = 0;
+            let listHtml = '';
+
+            categories.forEach(c => {
                 const baseBudget = data.budgets[c.name] || 0;
                 let displayBudget = baseBudget;
 
-                // 自由費で上振れ・下振れの差額を吸収（個人モードなら自分自由費、家族モードなら家族自由費）
-                if (actualSalary > 0) {
-                    if (currentMode === 'personal' && c.name === '自分自由費') {
-                        displayBudget += variance;
-                    } else if (currentMode === 'family' && c.name === '家族自由費') {
-                        displayBudget += variance;
-                    }
+                if (c.name === adjustCat) {
+                    displayBudget += variance;
                 }
                 
                 totalBudgetForDisplay += displayBudget;
@@ -1381,7 +1378,6 @@
                     barColor = 'bg-yellow-500';
                 }
 
-                // 該当カテゴリの今月のトランザクションを抽出し、備考(memo)でグループ分けする
                 const categoryTxs = data.transactions.filter(t => 
                     t.type === 'expense' && !t.excludeFromBudget && t.category === c.name &&
                     t.date.startsWith(`${currentBudgetYear}-${String(currentBudgetMonth + 1).padStart(2, '0')}`)
@@ -1396,7 +1392,6 @@
                     if (t.isEstimate) groupedByMemo[memoKey].isEstimate = true;
                 });
 
-                // グループ分けした内訳のHTMLを生成（金額が大きい順に表示）
                 let memoListHtml = '';
                 const memoKeys = Object.keys(groupedByMemo);
                 if (memoKeys.length > 0) {
@@ -1414,7 +1409,6 @@
                     memoListHtml += `</div>`;
                 }
 
-                // divをdetails/summaryに変更し、タップ展開可能にする
                 if (isBudgetEditing || baseBudget > 0 || combined > 0) {
                     listHtml += `
                     <details class="glass-card p-4 rounded-2xl group transition-all duration-300">
@@ -1425,7 +1419,6 @@
                                     <span class="font-bold text-xs">${c.name}</span>
                                 </div>
                                 ${isBudgetEditing ? 
-                                    // 編集モード時は表示用(displayBudget)ではなく、本来の設定額(baseBudget)を入力欄にセットする
                                     `<div class="flex items-center border border-gray-400/20 rounded-lg overflow-hidden bg-black/5" onclick="event.preventDefault();">
                                         <span class="px-2 text-xs opacity-60">¥</span>
                                         <input type="number" data-cat-name="${c.name}" value="${baseBudget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums">
@@ -1458,12 +1451,12 @@
             
             if (totalCombinedRatio >= 100 && totalBudgetForDisplay > 0) {
                 totalBarColor = 'bg-rose-500';
-                warnEl.innerText = "⚠️ 予定支出を含めると給与（総予算）を超過します！";
+                warnEl.innerText = "⚠️ 予定支出を含めると総予算を超過します！";
                 warnEl.className = "text-xs font-bold mt-2 text-right text-rose-500 flex justify-end";
                 warnEl.classList.remove('hidden');
             } else if (totalCombinedRatio >= 80 && totalBudgetForDisplay > 0) {
                 totalBarColor = 'bg-amber-500';
-                warnEl.innerText = "⚠️ 予定支出を含めると給与上限が近いです";
+                warnEl.innerText = "⚠️ 予定支出を含めると上限が近いです";
                 warnEl.className = "text-xs font-bold mt-2 text-right text-amber-500 flex justify-end";
                 warnEl.classList.remove('hidden');
             }
@@ -1477,7 +1470,6 @@
 
             lastRenderedBudgetTotals = { expense: totalExpense, estimate: totalEstimate, budget: totalBudgetForDisplay };
         }
-        // ==========================================
 
         function toggleBudgetEdit() {
             if (isBudgetEditing) {
