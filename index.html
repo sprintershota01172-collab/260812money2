@@ -1315,16 +1315,15 @@
             let totalExpense = 0;
             let totalEstimate = 0;
             
-            // 【変更点1】総予算を「先月の給与」から算出する
+            // 先月の給与（実績）を計算
             const prevDate = new Date(currentBudgetYear, currentBudgetMonth - 1, 1);
             const prevMonthPrefix = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-            let totalBudget = 0;
+            let actualSalary = 0;
 
             data.transactions.forEach(t => {
-                // 先月の収入データの中で、カテゴリ名またはメモに「給与」を含むものを総予算とする
                 if (t.type === 'income' && t.date.startsWith(prevMonthPrefix)) {
                     if (t.category === '給与' || (t.memo && t.memo.includes('給与'))) {
-                        totalBudget += t.amount;
+                        actualSalary += t.amount;
                     }
                 }
 
@@ -1342,30 +1341,47 @@
                 }
             });
 
+            // 基本予算26万円とし、先月給与との差額（上振れ/下振れ）を計算
+            const BASE_TOTAL = 260000;
+            const variance = actualSalary > 0 ? (actualSalary - BASE_TOTAL) : 0;
+            let totalBudgetForDisplay = 0;
+
             let listHtml = '';
             categories.forEach(c => {
-                // 各カテゴリの目標予算（編集可能な値）
-                const budget = data.budgets[c.name] || 0;
+                // 編集用に保存されているベースの予算
+                const baseBudget = data.budgets[c.name] || 0;
+                let displayBudget = baseBudget;
+
+                // 自由費で上振れ・下振れの差額を吸収（個人モードなら自分自由費、家族モードなら家族自由費）
+                if (actualSalary > 0) {
+                    if (currentMode === 'personal' && c.name === '自分自由費') {
+                        displayBudget += variance;
+                    } else if (currentMode === 'family' && c.name === '家族自由費') {
+                        displayBudget += variance;
+                    }
+                }
                 
+                totalBudgetForDisplay += displayBudget;
+
                 const expense = expensesByCategory[c.name] || 0;
                 const estimate = estimatesByCategory[c.name] || 0;
                 const combined = expense + estimate;
 
-                const ratio = budget > 0 ? Math.min((expense / budget) * 100, 100) : (expense > 0 ? 100 : 0);
-                const combinedRatio = budget > 0 ? Math.min((combined / budget) * 100, 100) : (combined > 0 ? 100 : 0);
-                const remaining = budget - combined;
+                const ratio = displayBudget > 0 ? Math.min((expense / displayBudget) * 100, 100) : (expense > 0 ? 100 : 0);
+                const combinedRatio = displayBudget > 0 ? Math.min((combined / displayBudget) * 100, 100) : (combined > 0 ? 100 : 0);
+                const remaining = displayBudget - combined;
                 
                 let statusColor = 'text-blue-500'; 
                 let barColor = 'bg-blue-500';      
-                if (combinedRatio >= 100 && budget > 0) {
+                if (combinedRatio >= 100 && displayBudget > 0) {
                     statusColor = 'text-red-500';  
                     barColor = 'bg-red-500';
-                } else if (combinedRatio >= 80 && budget > 0) {
+                } else if (combinedRatio >= 80 && displayBudget > 0) {
                     statusColor = 'text-yellow-500'; 
                     barColor = 'bg-yellow-500';
                 }
 
-                // 【変更点2】該当カテゴリの今月のトランザクションを抽出し、備考(memo)でグループ分けする
+                // 該当カテゴリの今月のトランザクションを抽出し、備考(memo)でグループ分けする
                 const categoryTxs = data.transactions.filter(t => 
                     t.type === 'expense' && !t.excludeFromBudget && t.category === c.name &&
                     t.date.startsWith(`${currentBudgetYear}-${String(currentBudgetMonth + 1).padStart(2, '0')}`)
@@ -1398,8 +1414,8 @@
                     memoListHtml += `</div>`;
                 }
 
-                // 【変更点3】divをdetails/summaryに変更し、タップ展開可能にする
-                if (isBudgetEditing || budget > 0 || combined > 0) {
+                // divをdetails/summaryに変更し、タップ展開可能にする
+                if (isBudgetEditing || baseBudget > 0 || combined > 0) {
                     listHtml += `
                     <details class="glass-card p-4 rounded-2xl group transition-all duration-300">
                         <summary class="list-none outline-none cursor-pointer">
@@ -1409,14 +1425,14 @@
                                     <span class="font-bold text-xs">${c.name}</span>
                                 </div>
                                 ${isBudgetEditing ? 
-                                    // 編集モード時はタップしても展開しないように onclick="event.preventDefault()" を追加
+                                    // 編集モード時は表示用(displayBudget)ではなく、本来の設定額(baseBudget)を入力欄にセットする
                                     `<div class="flex items-center border border-gray-400/20 rounded-lg overflow-hidden bg-black/5" onclick="event.preventDefault();">
                                         <span class="px-2 text-xs opacity-60">¥</span>
-                                        <input type="number" data-cat-name="${c.name}" value="${budget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums">
+                                        <input type="number" data-cat-name="${c.name}" value="${baseBudget}" class="budget-input w-24 p-1 bg-transparent text-right outline-none text-sm font-black min-w-0 tabular-nums">
                                     </div>` 
                                     : `<div class="text-right leading-tight">
                                         <span class="text-sm font-black ${statusColor} tabular-nums">残: ¥${remaining.toLocaleString()}</span><br>
-                                        <span class="text-[10px] opacity-60 font-bold tabular-nums">支出: ¥${combined.toLocaleString()} / 予算: ¥${budget.toLocaleString()}</span>
+                                        <span class="text-[10px] opacity-60 font-bold tabular-nums">支出: ¥${combined.toLocaleString()} / 予算: ¥${displayBudget.toLocaleString()}</span>
                                        </div>`
                                 }
                             </div>
@@ -1433,33 +1449,33 @@
             document.getElementById('budget-category-list').innerHTML = listHtml;
             
             const totalCombined = totalExpense + totalEstimate;
-            const totalRatio = totalBudget > 0 ? Math.min((totalExpense / totalBudget) * 100, 100) : 0;
-            const totalCombinedRatio = totalBudget > 0 ? Math.min((totalCombined / totalBudget) * 100, 100) : 0;
+            const totalRatio = totalBudgetForDisplay > 0 ? Math.min((totalExpense / totalBudgetForDisplay) * 100, 100) : 0;
+            const totalCombinedRatio = totalBudgetForDisplay > 0 ? Math.min((totalCombined / totalBudgetForDisplay) * 100, 100) : 0;
             
             let totalBarColor = 'bg-sky-500';
             const warnEl = document.getElementById('budget-warning-text');
             warnEl.classList.add('hidden');
             
-            if (totalCombinedRatio >= 100 && totalBudget > 0) {
+            if (totalCombinedRatio >= 100 && totalBudgetForDisplay > 0) {
                 totalBarColor = 'bg-rose-500';
-                warnEl.innerText = "⚠️ 予定支出を含めると給与を超過します！";
+                warnEl.innerText = "⚠️ 予定支出を含めると給与（総予算）を超過します！";
                 warnEl.className = "text-xs font-bold mt-2 text-right text-rose-500 flex justify-end";
                 warnEl.classList.remove('hidden');
-            } else if (totalCombinedRatio >= 80 && totalBudget > 0) {
+            } else if (totalCombinedRatio >= 80 && totalBudgetForDisplay > 0) {
                 totalBarColor = 'bg-amber-500';
                 warnEl.innerText = "⚠️ 予定支出を含めると給与上限が近いです";
                 warnEl.className = "text-xs font-bold mt-2 text-right text-amber-500 flex justify-end";
                 warnEl.classList.remove('hidden');
             }
 
-            document.getElementById('budget-total-text').innerText = `¥${totalExpense.toLocaleString()} / ¥${totalBudget.toLocaleString()}`;
+            document.getElementById('budget-total-text').innerText = `¥${totalExpense.toLocaleString()} / ¥${totalBudgetForDisplay.toLocaleString()}`;
             document.getElementById('budget-estimate-text').innerText = `予想計: ¥${totalCombined.toLocaleString()}`;
             
             document.getElementById('budget-total-bar').style.width = `${totalRatio}%`;
             document.getElementById('budget-total-est-bar').style.width = `${totalCombinedRatio}%`;
             document.getElementById('budget-total-bar').className = `absolute top-0 left-0 h-2.5 rounded-full transition-all duration-300 ${totalBarColor}`;
 
-            lastRenderedBudgetTotals = { expense: totalExpense, estimate: totalEstimate, budget: totalBudget };
+            lastRenderedBudgetTotals = { expense: totalExpense, estimate: totalEstimate, budget: totalBudgetForDisplay };
         }
         // ==========================================
 
